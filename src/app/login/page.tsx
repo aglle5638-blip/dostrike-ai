@@ -1,58 +1,184 @@
 "use client";
 
-import { UserCircle } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Sparkles, Loader2 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/components/AuthProvider";
+import { Suspense } from "react";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const { user, isLoading: authLoading } = useAuth();
+  const supabase = useMemo(() => createClient(), []);
 
-  const handleGoogleLogin = async () => {
-    // 完全にモック用の遷移（デモ環境・イメージ構築用）
-    router.push("/dashboard");
+  const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
+  const [isLoadingApple, setIsLoadingApple] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // すでにログイン済みならダッシュボードへ
+  useEffect(() => {
+    if (!authLoading && user) {
+      router.replace("/dashboard");
+    }
+  }, [user, authLoading, router]);
+
+  // OAuthエラーパラメータの表示
+  useEffect(() => {
+    if (searchParams.get("error") === "oauth") {
+      setError("ログインに失敗しました。再度お試しください。");
+    }
+  }, [searchParams]);
+
+  const signInWithGoogle = async () => {
+    setIsLoadingGoogle(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    if (error) {
+      setError("Googleログインに失敗しました。");
+      setIsLoadingGoogle(false);
+    }
+    // エラーがなければ supabase が自動でリダイレクトする
   };
+
+  const signInWithApple = async () => {
+    setIsLoadingApple(true);
+    setError(null);
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "apple",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    if (error) {
+      setError("Appleログインに失敗しました。");
+      setIsLoadingApple(false);
+    }
+  };
+
+  if (authLoading) {
+    return (
+      <div className="flex-1 flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center min-h-screen p-8 relative overflow-hidden bg-background">
+      {/* 背景グラデーション */}
       <div className="absolute inset-0 -z-10 bg-gradient-to-tr from-background via-background to-primary/5 pointer-events-none" />
-      
-      <div className="relative z-10 w-full max-w-md p-8 bg-card border border-border rounded-3xl shadow-[0_0_50px_-20px_rgba(192,132,252,0.3)] space-y-8 animate-in zoom-in-95 duration-500 ease-out">
+      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-primary/5 rounded-full blur-[120px] -z-10" />
+
+      <div className="relative z-10 w-full max-w-sm space-y-8 animate-in zoom-in-95 duration-500 ease-out">
+        {/* ロゴ */}
         <div className="flex flex-col items-center space-y-3 text-center">
-          <div className="w-16 h-16 bg-primary/10 text-primary border border-primary/20 rounded-2xl flex items-center justify-center mb-2 shadow-inner">
-            <UserCircle className="w-8 h-8" />
+          <div className="w-16 h-16 bg-primary/10 border border-primary/20 rounded-2xl flex items-center justify-center shadow-[0_0_30px_rgba(244,63,94,0.15)]">
+            <Sparkles className="w-8 h-8 text-primary" />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-card-foreground">ログイン</h1>
-          <p className="text-sm text-foreground/60">
-            ドストライクAIのダッシュボードにアクセスする
-          </p>
+          <div>
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              ドストライク<span className="text-primary">AI</span>
+            </h1>
+            <p className="text-sm text-foreground/50 mt-1">
+              好みを保存するにはログインが必要です
+            </p>
+          </div>
         </div>
-        
-        <div className="space-y-4 pt-4">
-          <button 
-            onClick={handleGoogleLogin}
-            className="flex items-center justify-center w-full gap-3 px-4 py-3.5 text-sm font-semibold transition-all border border-border rounded-xl hover:bg-secondary hover:border-primary/50"
+
+        {/* カード */}
+        <div className="bg-card border border-border/60 rounded-3xl shadow-[0_0_50px_-20px_rgba(244,63,94,0.2)] p-8 space-y-4">
+          {/* エラー */}
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm rounded-xl px-4 py-3 text-center">
+              {error}
+            </div>
+          )}
+
+          {/* Googleログイン */}
+          <button
+            onClick={signInWithGoogle}
+            disabled={isLoadingGoogle || isLoadingApple}
+            className="flex items-center justify-center w-full gap-3 px-4 py-3.5 text-sm font-bold bg-white text-gray-900 border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5">
-              <path
-                fill="currentColor"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
+            {isLoadingGoogle ? (
+              <Loader2 className="w-5 h-5 animate-spin text-gray-500" />
+            ) : (
+              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+            )}
             Googleでログイン
           </button>
+
+          {/* セパレーター */}
+          <div className="relative flex items-center gap-3">
+            <div className="flex-1 h-px bg-border" />
+            <span className="text-xs text-foreground/40 font-bold">または</span>
+            <div className="flex-1 h-px bg-border" />
+          </div>
+
+          {/* Apple ログイン（Apple HIG準拠: 黒背景） */}
+          <button
+            onClick={signInWithApple}
+            disabled={isLoadingGoogle || isLoadingApple}
+            className="flex items-center justify-center w-full gap-3 px-4 py-3.5 text-sm font-bold bg-black text-white rounded-2xl hover:bg-gray-900 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {isLoadingApple ? (
+              <Loader2 className="w-5 h-5 animate-spin text-white" />
+            ) : (
+              /* Apple SVG（Apple Brandのガイドライン準拠） */
+              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="white">
+                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.42c1.33.07 2.22.7 2.97.73.95-.18 1.87-.8 2.89-.76 1.23.07 2.17.53 2.78 1.35-2.52 1.5-1.91 4.85.56 5.79-.52 1.43-1.18 2.83-2.2 3.75zM12.03 7.25c-.14-2.26 1.72-4.07 3.84-4.25.26 2.42-2.18 4.25-3.84 4.25z" />
+              </svg>
+            )}
+            Appleでサインイン
+          </button>
+
+          {/* ゲストとして続ける */}
+          <button
+            onClick={() => router.push("/dashboard")}
+            className="w-full text-center text-xs text-foreground/40 hover:text-foreground/60 transition-colors py-1"
+          >
+            ログインせずにゲストとして続ける →
+          </button>
         </div>
+
+        {/* 注意書き */}
+        <p className="text-[11px] text-foreground/30 text-center leading-relaxed px-4">
+          ログインすることで
+          <a href="/terms" className="underline underline-offset-2 hover:text-foreground/50">利用規約</a>
+          および
+          <a href="/privacy" className="underline underline-offset-2 hover:text-foreground/50">プライバシーポリシー</a>
+          に同意したものとみなします。
+          本サービスは18歳以上の方のみご利用いただけます。
+        </p>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex-1 flex items-center justify-center min-h-screen">
+        <Loader2 className="w-8 h-8 text-primary animate-spin" />
+      </div>
+    }>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import BottomNav from "@/components/BottomNav";
 import AgeGate from "@/components/AgeGate";
+import { AuthProvider } from "@/components/AuthProvider";
 import { Suspense } from "react";
 
 const inter = Inter({
@@ -26,11 +27,13 @@ export default function RootLayout({
       className={`${inter.variable} antialiased h-full`}
     >
       <body className="min-h-full flex flex-col bg-background text-foreground font-sans pb-[75px] sm:pb-0">
-        <AgeGate />
-        {children}
-        <Suspense fallback={null}>
-          <BottomNav />
-        </Suspense>
+        <AuthProvider>
+          <AgeGate />
+          {children}
+          <Suspense fallback={null}>
+            <BottomNav />
+          </Suspense>
+        </AuthProvider>
       </body>
     </html>
   );
