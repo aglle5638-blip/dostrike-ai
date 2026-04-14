@@ -4,6 +4,7 @@ import { Crown, Sparkles, Play, Loader2, Plus, X, Video, ThumbsUp, ThumbsDown, H
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { VideoResult, RecommendResponse, SortBy } from "@/lib/fanza/types";
 
 // ============================================================
 // 30パターン 顔系統カタログ定義
@@ -129,6 +130,7 @@ export default function DashboardPage() {
        setViewMode({ type: 'personal' });
     }
   }, [queryMode]);
+
   // カタログ選択スロット（最大5つ）
   const [typeSlots, setTypeSlots] = useState<(FaceType | null)[]>([null, null, null, null, null]);
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0); // 現在AIマッチを表示しているスロット
@@ -136,7 +138,7 @@ export default function DashboardPage() {
   const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null); // モーダルで編集中のスロット番号
   const [catalogFilter, setCatalogFilter] = useState<string>('all');
 
-  
+
   // Interstitial Ad & VIP State
   const [showInterstitialAd, setShowInterstitialAd] = useState(false);
   const [interstitialAdIndex, setInterstitialAdIndex] = useState(0);
@@ -146,8 +148,44 @@ export default function DashboardPage() {
   // Feedback
   // The 'any' cast here prevents TS string compatibility bugs later
   const [feedback, setFeedback] = useState<Record<string, any>>({});
-  const [sortBy, setSortBy] = useState<string>("match");
+  const [sortBy, setSortBy] = useState<SortBy>("match");
   const [isSortOpen, setIsSortOpen] = useState(false);
+
+  // API-fetched video recommendations
+  const [videos, setVideos] = useState<VideoResult[]>([]);
+  const [isLoadingVideos, setIsLoadingVideos] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
+
+  // /api/videos/recommend フェッチ（スロット変更 or ソート変更時）
+  useEffect(() => {
+    const filledTypeIds = typeSlots.filter(Boolean).map(s => s!.id);
+    if (filledTypeIds.length === 0) {
+      setVideos([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoadingVideos(true);
+    setVideoError(null);
+    fetch('/api/videos/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 6 }),
+    })
+      .then(r => r.json())
+      .then((data: RecommendResponse) => {
+        if (!cancelled) {
+          setVideos(data.videos ?? []);
+          setIsLoadingVideos(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setVideoError('推薦の取得に失敗しました。しばらく待ってから再試行してください。');
+          setIsLoadingVideos(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [typeSlots, sortBy]);
   const [keepFilter, setKeepFilter] = useState<'all'|'keep'|'strike'>('all');
 
   // Undo Toast State
@@ -189,7 +227,7 @@ export default function DashboardPage() {
             {SORT_OPTIONS.map((option) => (
               <button
                 key={option.value}
-                onClick={() => { setSortBy(option.value); setIsSortOpen(false); }}
+                onClick={() => { setSortBy(option.value as SortBy); setIsSortOpen(false); }}
                 className={`w-full text-left px-4 py-2 md:py-2.5 text-[11px] md:text-sm font-bold hover:bg-secondary transition-colors flex items-center justify-between 
                   ${sortBy === option.value ? 'text-primary bg-primary/5' : 'text-foreground'}`}
               >
@@ -512,67 +550,114 @@ export default function DashboardPage() {
               </div>
 
 
-              {renderFeedHeader(<><span className="bg-primary text-white w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center mr-2 text-xs md:text-sm">{activeSlotIndex + 1}</span> <span className="text-base md:text-xl">AIマッチ結果</span></>)}
+              {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /> <span className="text-base md:text-xl">AIマッチ結果</span></>)}
 
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
-                {[1, 2, 3, 4, 5, 6].map((i) => {
-                  const sortOffset = sortBy === 'match' ? 0 : sortBy === 'popular' ? 5 : sortBy === 'new' ? 10 : 15;
-                  const seedBase = activeSlotIndex * 100;
-                  const seed = String(seedBase + i + sortOffset + 400);
-                  const imgId = FEMALE_IMAGE_IDS[(seedBase + i + sortOffset) % FEMALE_IMAGE_IDS.length];
-                  const thumbUrl = `https://images.unsplash.com/photo-${imgId}?w=800&h=450&fit=crop&auto=format&q=80`;
-                  const fb = feedback[seed];
-                  if (fb === 'change') {
+              {/* Loading skeleton */}
+              {isLoadingVideos && (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
+                  {[1,2,3,4,5,6].map(i => (
+                    <div key={i} className="flex flex-col gap-1.5">
+                      <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse" />
+                      <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-4/5" />
+                      <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-3/5" />
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Error state */}
+              {!isLoadingVideos && videoError && (
+                <div className="mt-4 p-6 bg-card border border-border/50 rounded-2xl text-center">
+                  <p className="text-sm text-foreground/60">{videoError}</p>
+                  <button
+                    onClick={() => {
+                      const filledTypeIds = typeSlots.filter(Boolean).map(s => s!.id);
+                      if (!filledTypeIds.length) return;
+                      setIsLoadingVideos(true);
+                      setVideoError(null);
+                      fetch('/api/videos/recommend', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 6 }),
+                      })
+                        .then(r => r.json())
+                        .then((data: RecommendResponse) => { setVideos(data.videos ?? []); setIsLoadingVideos(false); })
+                        .catch(() => { setVideoError('推薦の取得に失敗しました。'); setIsLoadingVideos(false); });
+                    }}
+                    className="mt-3 px-4 py-2 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary/90 transition-colors"
+                  >再試行</button>
+                </div>
+              )}
+
+              {/* Video grid */}
+              {!isLoadingVideos && !videoError && videos.length > 0 && (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
+                  {videos.map((video) => {
+                    const fb = feedback[video.id];
+                    if (fb === 'change') {
+                      return (
+                        <div key={video.id} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
+                          <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
+                          <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
+                        </div>
+                      );
+                    }
                     return (
-                      <div key={i} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-                        <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
+                      <div key={video.id} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                        <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
+                          <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={video.thumbnailUrl} alt={video.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                            <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
+                              <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
+                                <Sparkles className="w-3 h-3 text-primary mr-1" />
+                                <span className="text-white font-extrabold text-[10px] tracking-wide">{video.matchScore}%</span>
+                              </div>
+                              {video.source === 'mock' && (
+                                <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
+                              )}
+                              {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
+                              {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> アリ！</div>}
+                            </div>
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center p-4">
+                              <a
+                                href={video.affiliateUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-2 bg-white text-black py-2.5 px-6 rounded-full text-sm font-bold shadow-xl hover:scale-105 transition-transform z-20 mx-auto"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <Play className="w-4 h-4 fill-current" /> サンプル再生
+                              </a>
+                            </div>
+                          </div>
+                          <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50">
+                            <div className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">
+                              {video.title}
+                            </div>
+                            {video.actress && (
+                              <div className="text-[10px] text-foreground/50 mt-0.5 truncate">{video.actress}</div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
+                          <button onClick={() => handleFeedback(video.id, 'change')} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
+                            <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
+                          </button>
+                          <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
+                            <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
+                            <span>キープ</span>
+                          </button>
+                          <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
+                            <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
+                            <span>ストライク</span>
+                          </button>
+                        </div>
                       </div>
                     );
-                  }
-                  return (
-                    <div key={i} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                      <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
-                        <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={thumbUrl} alt={`Thumbnail ${i}`} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                          <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
-                            <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
-                              <Sparkles className="w-3 h-3 text-primary mr-1" />
-                              <span className="text-white font-extrabold text-[10px] tracking-wide">{99 - (i * 2 + (seedBase % 10))}.{Math.floor(Math.random() * 9)}%</span>
-                            </div>
-                            {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
-                            {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> アリ！</div>}
-                          </div>
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center p-4">
-                            <button className="flex items-center justify-center gap-2 bg-white text-black py-2.5 px-6 rounded-full text-sm font-bold shadow-xl hover:scale-105 transition-transform z-20 mx-auto">
-                              <Play className="w-4 h-4 fill-current" /> サンプル再生
-                            </button>
-                          </div>
-                        </div>
-                        <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50">
-                          <div className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">
-                            {MOCK_TITLES[(seedBase + i) % MOCK_TITLES.length]}
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
-                        <button onClick={() => handleFeedback(seed, 'change')} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
-                          <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
-                        </button>
-                        <button onClick={() => handleFeedback(seed, fb === 'keep' ? '' : 'keep')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
-                          <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
-                          <span>キープ</span>
-                        </button>
-                        <button onClick={() => handleFeedback(seed, fb === 'strike' ? '' : 'strike')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
-                          <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
-                          <span>ストライク</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -692,7 +777,7 @@ export default function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5 mt-6 pb-8">
           {Array.from({ length: 20 }).map((_, idx) => {
             const i = idx + 1;
-            const sortOffset = sortBy === 'match' ? 0 : sortBy === 'popular' ? 5 : sortBy === 'new' ? 10 : 15;
+            const sortOffset = sortBy === 'match' ? 0 : sortBy === 'rank' ? 5 : sortBy === 'date' ? 10 : 15;
             const seedBase = (trendValue?.length || 1) * 10;
             const seed = String(seedBase + i + sortOffset + 900);
             const imgId = FEMALE_IMAGE_IDS[(seedBase + i + sortOffset) % FEMALE_IMAGE_IDS.length];
