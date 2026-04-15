@@ -150,6 +150,8 @@ export default function DashboardPage() {
   // Feedback
   // The 'any' cast here prevents TS string compatibility bugs later
   const [feedback, setFeedback] = useState<Record<string, any>>({});
+  // 動画メタデータキャッシュ（保存リスト表示用）
+  const [videoMeta, setVideoMeta] = useState<Record<string, VideoResult>>({});
   const [sortBy, setSortBy] = useState<SortBy>("match");
   const [isSortOpen, setIsSortOpen] = useState(false);
 
@@ -253,6 +255,9 @@ export default function DashboardPage() {
       if (data.feedback && typeof data.feedback === 'object') {
         setFeedback(prev => ({ ...prev, ...data.feedback }));
       }
+      if (data.videoMeta && typeof data.videoMeta === 'object') {
+        setVideoMeta(prev => ({ ...prev, ...data.videoMeta }));
+      }
     } catch {
       // ロード失敗はサイレントに無視（ローカルステートで継続）
     }
@@ -322,9 +327,14 @@ export default function DashboardPage() {
   }, [typeSlots, session?.access_token]);
 
   // ── フィードバック処理（ローカル更新 + DB保存） ────────────────────
-  const handleFeedback = (videoId: string, action: 'strike'|'change'|'keep'|'') => {
+  const handleFeedback = (videoId: string, action: 'strike'|'change'|'keep'|'', video?: VideoResult) => {
     // 楽観的UI更新（即座に反映）
     setFeedback(prev => ({...prev, [videoId]: action}));
+
+    // メタデータをローカルにキャッシュ（保存リスト表示用）
+    if (video && action !== '' && action !== 'change') {
+      setVideoMeta(prev => ({ ...prev, [videoId]: video }));
+    }
 
     // DB保存（ログイン中 かつ change以外）
     if (session?.access_token && action !== 'change') {
@@ -338,6 +348,17 @@ export default function DashboardPage() {
           videoId,
           action,
           faceTypeId: typeSlots[activeSlotIndex]?.id ?? null,
+          videoMeta: video ? {
+            title:         video.title,
+            thumbnailUrl:  video.thumbnailUrl,
+            affiliateUrl:  video.affiliateUrl,
+            actress:       video.actress,
+            matchScore:    video.matchScore,
+            tags:          video.tags,
+            price:         video.price,
+            reviewAverage: video.reviewAverage,
+            durationMin:   video.durationMin,
+          } : undefined,
         }),
       }).catch(() => {}); // fire-and-forget
     }
@@ -769,14 +790,14 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
-                          <button onClick={() => handleFeedback(video.id, 'change')} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
+                          <button onClick={() => handleFeedback(video.id, 'change', video)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
                             <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
                           </button>
-                          <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
+                          <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
                             <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
                             <span>キープ</span>
                           </button>
-                          <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
+                          <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
                             <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
                             <span>ストライク</span>
                           </button>
@@ -1001,6 +1022,11 @@ export default function DashboardPage() {
               </button>
             </div>
          </div>
+         {/* 件数 */}
+         {keepEntries.length > 0 && (
+           <p className="text-xs text-foreground/40 font-bold mb-4">{keepEntries.length}件保存中</p>
+         )}
+
          <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
             {keepEntries.length === 0 ? (
                <div className="col-span-full py-20 flex flex-col items-center justify-center text-center">
@@ -1008,61 +1034,125 @@ export default function DashboardPage() {
                      <Heart className="w-8 h-8 text-foreground/20 stroke-2" />
                   </div>
                   <h3 className="text-base font-extrabold text-foreground mb-1">まだ保存されていません</h3>
-                  <p className="text-xs text-foreground/50 font-medium">選抜やトレンドモードから気になる作品に💛や👍をつけましょう</p>
+                  <p className="text-xs text-foreground/50 font-medium max-w-[220px] mx-auto leading-relaxed">
+                    選抜やトレンドモードで気になる作品に💛や👍をつけましょう
+                  </p>
+                  <button
+                    onClick={() => setViewMode({ type: 'personal' })}
+                    className="mt-5 px-5 py-2.5 bg-primary text-white rounded-full font-bold text-sm hover:bg-primary/90 transition-colors"
+                  >
+                    AIマッチを見る →
+                  </button>
                </div>
             ) : (
-               keepEntries.map(([seed, action]) => {
-                  const numSeed = parseInt(seed, 10) || 0;
-                  const imgId = FEMALE_IMAGE_IDS[numSeed % FEMALE_IMAGE_IDS.length];
+               keepEntries.map(([videoId, action]) => {
+                  // リアルメタデータ優先、なければフォールバック
+                  const meta = videoMeta[videoId];
+                  const numSeed = parseInt(videoId, 10) || 0;
+                  const fallbackImgId = FEMALE_IMAGE_IDS[numSeed % FEMALE_IMAGE_IDS.length];
+                  const thumbnailSrc = meta?.thumbnailUrl
+                    || `https://images.unsplash.com/photo-${fallbackImgId}?w=400&h=250&fit=crop`;
+                  const title = meta?.title || MOCK_TITLES[(numSeed * 5) % MOCK_TITLES.length];
+                  const affiliateUrl = meta?.affiliateUrl;
+                  const matchScore = meta?.matchScore;
+                  const actress = meta?.actress && meta.actress !== '不明' ? meta.actress : null;
+                  const price = meta?.price;
+                  const hasMeta = !!meta;
+
                   return (
-                    <div key={seed} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                      <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 ${action === 'keep' ? 'border-yellow-400/70 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : action === 'strike' ? 'border-primary/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : ''}`}>
+                    <div key={videoId} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                      <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 ${action === 'keep' ? 'border-yellow-400/70 shadow-[0_0_12px_rgba(250,204,21,0.15)]' : action === 'strike' ? 'border-primary/70 shadow-[0_0_12px_rgba(244,63,94,0.15)]' : ''}`}>
+                        {/* サムネイル */}
                         <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
                           {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={`https://images.unsplash.com/photo-${imgId}?w=400&h=500&fit=crop`} alt="kept" className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                          
-                          <div className="absolute top-2 left-2 flex gap-1.5">
-                            <div className="bg-black/70 backdrop-blur-sm text-white px-2 py-0.5 rounded flex items-center shadow-sm text-[10px] font-bold whitespace-nowrap">
-                                <Play className="w-2.5 h-2.5 mr-1" /> サンプル
-                            </div>
-                            {action === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg flex items-center shadow-lg font-bold text-[10px] whitespace-nowrap"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> アリ！</div>}
+                          <img src={thumbnailSrc} alt={title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+
+                          {/* 左上バッジ */}
+                          <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap max-w-[85%]">
+                            {matchScore && (
+                              <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
+                                <Sparkles className="w-3 h-3 text-primary mr-1" />
+                                <span className="text-white font-extrabold text-[10px]">{matchScore}%</span>
+                              </div>
+                            )}
+                            {!hasMeta && (
+                              <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
+                            )}
                           </div>
 
+                          {/* 右上ステータスバッジ */}
                           {action === 'keep' && (
                             <div className="absolute top-2 right-2 bg-yellow-400 text-black px-2 py-0.5 flex items-center rounded-lg shadow-lg font-bold text-[10px] whitespace-nowrap">
-                              <Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> キープ中
+                              <Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> キープ
+                            </div>
+                          )}
+                          {action === 'strike' && (
+                            <div className="absolute top-2 right-2 bg-primary text-white px-2 py-0.5 flex items-center rounded-lg shadow-lg font-bold text-[10px] whitespace-nowrap">
+                              <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> ストライク
                             </div>
                           )}
 
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                            <button className="flex items-center justify-center gap-1.5 bg-white text-black py-1.5 px-4 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform">
-                                <Play className="w-3 h-3 fill-current" /> 再生
-                            </button>
+                          {/* ホバー：再生ボタン */}
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                            {affiliateUrl ? (
+                              <a
+                                href={affiliateUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-5 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform"
+                              >
+                                <Play className="w-3 h-3 fill-current" /> 視聴する
+                              </a>
+                            ) : (
+                              <div className="flex items-center justify-center gap-1.5 bg-white/80 text-black/60 py-2 px-5 rounded-full text-[11px] font-bold shadow-xl">
+                                <Play className="w-3 h-3" /> DEMO
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50 flex flex-col justify-center">
-                           <div className="font-bold text-[11px] md:text-sm line-clamp-2 leading-relaxed text-foreground/90">
-                              <span className="text-primary mr-1 text-[10px] md:text-xs">[{action === 'strike' ? '👍ドストライク' : '💛キープ'}]</span>
-                              {MOCK_TITLES[(numSeed * 5) % MOCK_TITLES.length]}
-                           </div>
+                        {/* 情報エリア */}
+                        <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50">
+                          <p className="font-bold text-[11px] md:text-xs line-clamp-2 leading-relaxed text-foreground/90 mb-1">
+                            {title}
+                          </p>
+                          <div className="flex items-center justify-between gap-2">
+                            {actress && (
+                              <span className="text-[9px] md:text-[10px] text-foreground/50 font-bold truncate">{actress}</span>
+                            )}
+                            {price && (
+                              <span className="text-[9px] md:text-[10px] text-primary font-extrabold ml-auto flex-shrink-0">¥{price}</span>
+                            )}
+                          </div>
                         </div>
                       </div>
 
+                      {/* アクションボタン */}
                       <div className="flex gap-1 md:gap-2 w-full justify-between items-center px-0.5">
                           <button
-                            onClick={() => handleKeepRemove(seed, action)}
+                            onClick={() => handleKeepRemove(videoId, action)}
                             className="flex flex-shrink-0 items-center justify-center gap-1 px-2 h-8 md:h-9 rounded-full transition-all bg-secondary border border-border text-foreground/60 hover:bg-red-500 hover:text-white hover:border-red-500 text-[9px] md:text-[10px] font-bold whitespace-nowrap"
                             title="解除する"
                           >
                             <X className="w-3 h-3 flex-shrink-0" />
                             <span>解除</span>
                           </button>
-                          <div className={`flex flex-1 items-center justify-center gap-1 py-1.5 rounded-full font-bold text-[9px] md:text-xs ${action === 'keep' ? 'bg-yellow-400/20 text-yellow-600 border border-yellow-400/30' : 'bg-primary/10 text-primary border border-primary/20'}`}>
-                            {action === 'keep'
-                              ? <><Heart className="w-3 h-3 fill-current flex-shrink-0" /><span>キープ中</span></>
-                              : <><ThumbsUp className="w-3 h-3 fill-current flex-shrink-0" /><span>ドストライク中</span></>}
-                          </div>
+                          {affiliateUrl ? (
+                            <a
+                              href={affiliateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-1 items-center justify-center gap-1 py-1.5 rounded-full font-bold text-[9px] md:text-[10px] bg-primary/10 text-primary border border-primary/20 hover:bg-primary hover:text-white transition-colors"
+                            >
+                              <Play className="w-3 h-3 flex-shrink-0" /><span>視聴する</span>
+                            </a>
+                          ) : (
+                            <div className={`flex flex-1 items-center justify-center gap-1 py-1.5 rounded-full font-bold text-[9px] md:text-[10px] ${action === 'keep' ? 'bg-yellow-400/20 text-yellow-600 border border-yellow-400/30' : 'bg-primary/10 text-primary border border-primary/20'}`}>
+                              {action === 'keep'
+                                ? <><Heart className="w-3 h-3 fill-current flex-shrink-0" /><span>キープ中</span></>
+                                : <><ThumbsUp className="w-3 h-3 fill-current flex-shrink-0" /><span>ストライク中</span></>}
+                            </div>
+                          )}
                       </div>
                     </div>
                   );

@@ -3,12 +3,12 @@
  * GET  /api/videos/feedback   - ユーザーのフィードバック一覧を取得
  *
  * Authorization: Bearer <supabase-access-token> ヘッダーが必要。
- * 未認証の場合は { success: true } / { feedback: {} } を返す（ローカルステートで管理）。
+ * 未認証の場合は { success: true } / { feedback: {}, videoMeta: {} } を返す。
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createAuthedClient } from '@/lib/supabase/server';
-import type { FeedbackRequest, FeedbackResponse } from '@/lib/fanza/types';
+import type { FeedbackRequest, FeedbackResponse, FeedbackListResponse } from '@/lib/fanza/types';
 
 const VALID_ACTIONS = ['keep', 'strike', ''] as const;
 
@@ -23,7 +23,7 @@ function extractToken(req: NextRequest): string | null {
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<FeedbackRequest>;
-    const { videoId, action, faceTypeId } = body;
+    const { videoId, action, faceTypeId, videoMeta } = body;
 
     if (!videoId || typeof videoId !== 'string') {
       return NextResponse.json({ error: 'videoId が必要です' }, { status: 400 });
@@ -34,7 +34,6 @@ export async function POST(req: NextRequest) {
 
     const token = extractToken(req);
     if (!token) {
-      // 未認証: フロントのローカルステートに任せる
       return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
     }
 
@@ -63,6 +62,7 @@ export async function POST(req: NextRequest) {
         video_id:     videoId,
         action:       action as 'keep' | 'strike',
         face_type_id: faceTypeId ?? null,
+        video_meta:   videoMeta ?? null,
         updated_at:   new Date().toISOString(),
       }, { onConflict: 'user_id,video_id' });
     }
@@ -78,30 +78,37 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   try {
     const token = extractToken(req);
-    if (!token) return NextResponse.json({ feedback: {} });
+    if (!token) return NextResponse.json({ feedback: {}, videoMeta: {} } satisfies FeedbackListResponse);
 
     const supabase = createAuthedClient(token);
-    if (!supabase) return NextResponse.json({ feedback: {} });
+    if (!supabase) return NextResponse.json({ feedback: {}, videoMeta: {} } satisfies FeedbackListResponse);
 
     const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) return NextResponse.json({ feedback: {} });
+    if (authError || !user) return NextResponse.json({ feedback: {}, videoMeta: {} } satisfies FeedbackListResponse);
 
     const { data, error } = await supabase
       .from('user_feedback')
-      .select('video_id, action')
+      .select('video_id, action, video_meta, created_at')
       .eq('user_id', user.id)
-      .neq('action', '');
+      .neq('action', '')
+      .order('created_at', { ascending: false });
 
     if (error) throw error;
 
     const feedback: Record<string, string> = {};
+    const videoMeta: FeedbackListResponse['videoMeta'] = {};
+
     for (const row of data ?? []) {
       feedback[row.video_id] = row.action;
+      if (row.video_meta) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        videoMeta[row.video_id] = row.video_meta as any;
+      }
     }
 
-    return NextResponse.json({ feedback });
+    return NextResponse.json({ feedback, videoMeta } satisfies FeedbackListResponse);
   } catch (err) {
     console.error('[/api/videos/feedback] GET error:', err);
-    return NextResponse.json({ feedback: {} });
+    return NextResponse.json({ feedback: {}, videoMeta: {} } satisfies FeedbackListResponse);
   }
 }
