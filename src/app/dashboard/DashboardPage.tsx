@@ -90,6 +90,31 @@ const MOCK_TITLES = [
 ];
 
 
+// トレンド名/タグ → 顔タイプIDマッピング（FANZA APIのkeywordsに対応）
+const TREND_TO_TYPE_IDS: Record<string, string[]> = {
+  '清楚系グラビア': ['A1', 'A2', 'A3'],
+  '黒髪ショート':   ['A2', 'E1'],
+  'ぽっちゃり系':   ['B4', 'F5'],
+  '高身長モデル':   ['E2', 'E5'],
+  '女子大生':       ['B1', 'B2', 'B3'],
+  '熟女・人妻':     ['C4', 'C5'],
+  'スレンダー':     ['A1', 'E1', 'E2'],
+  '褐色肌':         ['F4'],
+  'コスプレ':       ['B2', 'D4'],
+  'ギャル':         ['D1', 'D2', 'D5'],
+  '#お姉さん系':    ['C1', 'C2', 'C3'],
+  '#素人風':        ['B3', 'F2'],
+  '#ギャル':        ['D1', 'D2', 'D5'],
+  '#JD風':          ['B1', 'B2', 'B5'],
+  '#色白':          ['A1', 'A2', 'E1'],
+  '#巨乳':          ['A4', 'D2'],
+  '#美脚':          ['E2', 'E5'],
+  '#童顔':          ['B1', 'B4'],
+  '#メガネ':        ['A5', 'C4'],
+  '#制服':          ['B5', 'B2'],
+};
+const TREND_FALLBACK_IDS = ['A1', 'B1', 'C1', 'D1', 'E1']; // 総合トレンド用
+
 const TRENDS = [
   { rank: 1, name: "清楚系グラビア", color: "text-primary bg-primary/10" },
   { rank: 2, name: "黒髪ショート", color: "text-primary bg-primary/10" },
@@ -137,6 +162,7 @@ export default function DashboardPage() {
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0); // 現在AIマッチを表示しているスロット
   const [isSlotsLoading, setIsSlotsLoading] = useState(false); // DBからスロット復元中
   const [showCatalogModal, setShowCatalogModal] = useState(false);
+  const [previewFace, setPreviewFace] = useState<FaceType | null>(null);
   const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null); // モーダルで編集中のスロット番号
   const [catalogFilter, setCatalogFilter] = useState<string>('all');
 
@@ -155,6 +181,8 @@ export default function DashboardPage() {
   // ドストライクAIコミュニティ統計（全ユーザーの集計）
   type VideoStat = { keepCount: number; strikeCount: number; total: number };
   const [videoStats, setVideoStats] = useState<Record<string, VideoStat>>({});
+  const [trendVideos, setTrendVideos] = useState<VideoResult[]>([]);
+  const [isTrendLoading, setIsTrendLoading] = useState(false);
   const [sortBy, setSortBy] = useState<SortBy>("match");
   const [isSortOpen, setIsSortOpen] = useState(false);
 
@@ -335,6 +363,34 @@ export default function DashboardPage() {
       .then(data => { if (data.stats) setVideoStats(prev => ({ ...prev, ...data.stats })); })
       .catch(() => {});
   }, [videos]);
+
+  // ── トレンド/タグ変更時にFANZA APIから動画を取得 ─────────────────
+  useEffect(() => {
+    if (viewMode.type !== 'trend') return;
+    const trendKey = viewMode.value;
+    const typeIds = trendKey
+      ? (TREND_TO_TYPE_IDS[trendKey] ?? TREND_FALLBACK_IDS)
+      : TREND_FALLBACK_IDS;
+    let cancelled = false;
+    setIsTrendLoading(true);
+    setTrendVideos([]);
+    fetch('/api/videos/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotTypeIds: typeIds, sortBy, limit: 20 }),
+    })
+      .then(r => r.json())
+      .then((data: RecommendResponse) => {
+        if (!cancelled) {
+          setTrendVideos(data.videos ?? []);
+          setIsTrendLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setIsTrendLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [viewMode, sortBy]);
 
   // スロット変更時に自動保存
   const isFirstSlotLoad = useRef(true);
@@ -520,7 +576,7 @@ export default function DashboardPage() {
           ))}
         </div>
 
-        <div className="overflow-y-auto flex-1 p-4">
+        <div className="overflow-y-auto p-4" style={{ height: '420px' }}>
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
             {filteredCatalog.map(type => {
               const isSelected = typeSlots.some(s => s?.id === type.id);
@@ -534,12 +590,19 @@ export default function DashboardPage() {
                       : 'border-border/50 bg-secondary/30 hover:border-primary/50 hover:bg-card'
                   }`}
                 >
-                  <div className="w-full aspect-square rounded-xl overflow-hidden relative">
+                  <div
+                    className="w-full aspect-square rounded-xl overflow-hidden relative"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPreviewFace(type);
+                    }}
+                  >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={`/faces/${type.id}.jpg`}
                       alt={type.name}
                       className="w-full h-full object-cover"
+                      loading="lazy"
                     />
                     {isSelected && (
                       <div className="absolute inset-0 bg-primary/30 flex items-center justify-center">
@@ -561,6 +624,36 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      {/* ライトボックス */}
+      {previewFace && (
+        <div
+          className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPreviewFace(null)}
+        >
+          <div className="relative max-w-sm w-[80vw] animate-in zoom-in-95 duration-200">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/faces/${previewFace.id}.jpg`}
+              alt={previewFace.name}
+              className="w-full rounded-3xl shadow-2xl object-cover"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-3xl p-5">
+              <p className="text-white font-extrabold text-lg">{previewFace.name}</p>
+              <div className="flex gap-1 mt-1 flex-wrap">
+                {previewFace.tags.map(tag => (
+                  <span key={tag} className="text-white/70 text-xs font-bold">{tag}</span>
+                ))}
+              </div>
+            </div>
+            <button
+              onClick={() => setPreviewFace(null)}
+              className="absolute top-3 right-3 w-9 h-9 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 
@@ -651,17 +744,6 @@ export default function DashboardPage() {
               );
             })}
 
-            {!isSlotsLoading && filledSlots > 0 && (
-              <button
-                onClick={() => {
-                  const emptyIdx = typeSlots.findIndex(s => s === null);
-                  handleOpenCatalog(emptyIdx >= 0 ? emptyIdx : 0);
-                }}
-                className="flex-shrink-0 self-center flex items-center gap-1 text-[10px] font-bold text-primary/70 hover:text-primary px-2 py-1.5 rounded-full hover:bg-primary/10 transition-colors ml-1"
-              >
-                <Plus className="w-3 h-3" /> 変更
-              </button>
-            )}
           </div>
 
           {/* Active Type Info */}
@@ -815,9 +897,14 @@ export default function DashboardPage() {
                             </div>
                           </div>
                           <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
-                            <div className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">
+                            <a
+                              href={video.affiliateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed hover:text-primary transition-colors"
+                            >
                               {video.title}
-                            </div>
+                            </a>
                             {/* 女優名 ＋ ⭐レビュー評価 */}
                             <div className="flex items-center justify-between gap-1 min-w-0">
                               {video.actress && (
@@ -976,96 +1063,136 @@ export default function DashboardPage() {
 
         {renderFeedHeader(<><TrendingUp className="w-6 h-6 text-primary mr-2 hidden sm:block" /> {title}</>)}
         
-        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5 mt-6 pb-8">
-          {Array.from({ length: 20 }).map((_, idx) => {
-            const i = idx + 1;
-            const sortOffset = sortBy === 'match' ? 0 : sortBy === 'rank' ? 5 : sortBy === 'date' ? 10 : 15;
-            const seedBase = (trendValue?.length || 1) * 10;
-            const seed = String(seedBase + i + sortOffset + 900);
-            const imgId = FEMALE_IMAGE_IDS[(seedBase + i + sortOffset) % FEMALE_IMAGE_IDS.length];
-            const thumbUrl = `https://images.unsplash.com/photo-${imgId}?w=500&h=500&fit=crop&auto=format&q=80`;
-            const fb = feedback[seed];
+        {/* Loading skeleton */}
+        {isTrendLoading && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5 mt-6 pb-8">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="flex flex-col gap-1.5">
+                <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse" />
+                <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-full" />
+                <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-4/5" />
+                <div className="flex gap-1 mt-1">
+                  <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                  <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                  <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-            return (
-              <div key={i} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : fb === 'strike' ? 'border-primary/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : ''}`}>
-                  <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={thumbUrl} alt={`Trend ${i}`} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
-                    
-                    <div className="absolute top-2 left-2 flex gap-1.5">
-                      <div className="bg-black/70 backdrop-blur-sm text-white px-2 py-0.5 rounded flex items-center shadow-sm text-[10px] font-bold whitespace-nowrap">
-                         <Play className="w-2.5 h-2.5 mr-1" /> サンプル
+        {!isTrendLoading && (
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-4 md:gap-5 mt-6 pb-8">
+            {trendVideos.map((v, idx) => {
+              const fb = feedback[v.id];
+              const stat = videoStats[v.id];
+              return (
+                <div key={v.id} className="flex flex-col gap-1.5 pb-2">
+                  <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70 shadow-[0_0_15px_rgba(250,204,21,0.2)]' : fb === 'strike' ? 'border-primary/70 shadow-[0_0_15px_rgba(244,63,94,0.2)]' : ''}`}>
+                    <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={v.thumbnailUrl} alt={v.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" loading="lazy" />
+
+                      <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap max-w-[85%]">
+                        {v.source === 'mock' && (
+                          <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
+                        )}
+                        {fb === 'keep' && (
+                          <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg flex items-center shadow-lg font-bold text-[10px] whitespace-nowrap">
+                            <Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> キープ中
+                          </div>
+                        )}
+                        {fb === 'strike' && (
+                          <div className="bg-primary text-white px-2 py-0.5 rounded-lg flex items-center shadow-lg font-bold text-[10px] whitespace-nowrap">
+                            <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> アリ！
+                          </div>
+                        )}
                       </div>
-                      {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg flex items-center shadow-lg font-bold text-[10px] whitespace-nowrap"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> アリ！</div>}
+
+                      {/* ホバーオーバーレイ */}
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
+                        <a
+                          href={v.affiliateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-4 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform w-full max-w-[140px]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <Play className="w-3 h-3 fill-current flex-shrink-0" /> サンプル再生
+                        </a>
+                        <a
+                          href={v.affiliateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center justify-center gap-1.5 bg-white/20 border border-white/40 text-white py-2 px-4 rounded-full text-[11px] font-bold hover:bg-white/30 transition-colors w-full max-w-[140px]"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <MessageSquare className="w-3 h-3 flex-shrink-0" /> レビューを見る
+                        </a>
+                      </div>
                     </div>
 
-                    {fb === 'keep' && (
-                      <div className="absolute top-2 right-2 bg-yellow-400 text-black px-2 py-0.5 flex items-center rounded-lg shadow-lg font-bold text-[10px] whitespace-nowrap">
-                        <Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> キープ中
+                    <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50 flex flex-col gap-1">
+                      <a
+                        href={v.affiliateUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-bold text-[11px] md:text-sm line-clamp-2 leading-relaxed text-foreground/90 hover:text-primary transition-colors"
+                      >
+                        {v.title}
+                      </a>
+                      <div className="flex items-center justify-between gap-1 min-w-0">
+                        {v.actress && (
+                          <div className="text-[10px] text-foreground/50 truncate flex-1">{v.actress}</div>
+                        )}
+                        {v.reviewAverage != null && (
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                            <span className="text-[10px] font-bold text-foreground/70">{v.reviewAverage.toFixed(1)}</span>
+                            {v.reviewCount != null && (
+                              <span className="text-[9px] text-foreground/40">({v.reviewCount.toLocaleString()})</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                    )}
-                    
-                    {/* ホバーオーバーレイ：再生 ＋ レビュー */}
-                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
-                      <button className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-5 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform w-full max-w-[160px]">
-                        <Play className="w-3 h-3 fill-current flex-shrink-0" /> サンプル再生
-                      </button>
-                      <button className="flex items-center justify-center gap-1.5 bg-white/20 backdrop-blur-sm border border-white/40 text-white py-2 px-5 rounded-full text-[11px] font-bold hover:bg-white/30 transition-colors w-full max-w-[160px]">
-                        <MessageSquare className="w-3 h-3 flex-shrink-0" /> レビューを見る
-                      </button>
+                      {stat && stat.total > 0 && (
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
+                          <span className="text-[9px] text-foreground/40 font-bold">
+                            {stat.total}人中 <span className="text-primary">{Math.round((stat.strikeCount / stat.total) * 100)}%</span>がドストライク
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* トレンドカード情報エリア */}
-                  {(() => {
-                    const mockReviewAvg = (3.6 + ((seedBase + i) % 14) * 0.1).toFixed(1);
-                    const mockReviewCount = 40 + (seedBase + i) * 13;
-                    const mockTotal = 8 + i * 5;
-                    const mockStrikePct = Math.min(95, 40 + Math.floor((seedBase + i * 3) % 50));
-                    return (
-                      <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50 flex flex-col gap-1">
-                        <div className="font-bold text-[11px] md:text-sm line-clamp-2 leading-relaxed text-foreground/90">
-                          <span className="text-primary mr-1 text-[10px] md:text-xs">[{trendValue || 'オススメ'}]</span>
-                          {MOCK_TITLES[((seedBase + i) * 3) % MOCK_TITLES.length]}
-                        </div>
-                        <div className="flex items-center justify-between gap-1">
-                          {/* ⭐ レビュー評価 */}
-                          <div className="flex items-center gap-0.5">
-                            <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                            <span className="text-[10px] font-bold text-foreground/70">{mockReviewAvg}</span>
-                            <span className="text-[9px] text-foreground/40">({mockReviewCount})</span>
-                          </div>
-                          {/* コミュニティ統計 */}
-                          <div className="flex items-center gap-0.5">
-                            <Users className="w-2.5 h-2.5 text-foreground/30" />
-                            <span className="text-[9px] text-foreground/40 font-bold">
-                              {mockTotal}人中 <span className="text-primary">{mockStrikePct}%</span>がドストライク
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
+                  <div className="flex gap-1.5 w-full items-center">
+                    <button
+                      onClick={() => handleFeedback(v.id, 'change', v)}
+                      className={`flex-shrink-0 flex items-center justify-center w-9 h-9 rounded-full transition-all ${fb === 'change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}
+                    >
+                      <ThumbsDown className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(v.id, fb === 'keep' ? '' : 'keep', v)}
+                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-full font-bold text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/80 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}
+                    >
+                      <Heart className={`w-3 h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
+                      <span>キープ</span>
+                    </button>
+                    <button
+                      onClick={() => handleFeedback(v.id, fb === 'strike' ? '' : 'strike', v)}
+                      className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-full font-bold text-[10px] transition-all ${fb === 'strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}
+                    >
+                      <ThumbsUp className="w-3 h-3 flex-shrink-0" />
+                      <span>ドスト</span>
+                    </button>
+                  </div>
                 </div>
-
-                <div className="flex gap-1 md:gap-2 w-full justify-between items-center px-0.5">
-                    <button onClick={() => handleFeedback(seed, 'change')} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white shadow-md' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`} title="好みじゃない">
-                        <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
-                    </button>
-                    <button onClick={() => handleFeedback(seed, fb === 'keep' ? '' : 'keep')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/80 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
-                        <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
-                        <span>キープ</span>
-                    </button>
-                    <button onClick={() => handleFeedback(seed, fb === 'strike' ? '' : 'strike')} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white shadow-md' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`} title="ドストライク！">
-                        <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
-                        <span>ストライク</span>
-                    </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     );
   };
@@ -1210,9 +1337,20 @@ export default function DashboardPage() {
 
                         {/* 情報エリア */}
                         <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50 flex flex-col gap-1">
-                          <p className="font-bold text-[11px] md:text-xs line-clamp-2 leading-relaxed text-foreground/90">
-                            {title}
-                          </p>
+                          {affiliateUrl ? (
+                            <a
+                              href={affiliateUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="font-bold text-[11px] md:text-xs line-clamp-2 leading-relaxed text-foreground/90 hover:text-primary transition-colors"
+                            >
+                              {title}
+                            </a>
+                          ) : (
+                            <p className="font-bold text-[11px] md:text-xs line-clamp-2 leading-relaxed text-foreground/90">
+                              {title}
+                            </p>
+                          )}
                           <div className="flex items-center justify-between gap-1 min-w-0">
                             {actress && (
                               <span className="text-[9px] md:text-[10px] text-foreground/50 font-bold truncate flex-1">{actress}</span>
@@ -1341,6 +1479,9 @@ export default function DashboardPage() {
         </Link>
         
         <div className="hidden sm:flex items-center gap-3 w-auto justify-end">
+          <Link href="/column" className="text-xs font-bold text-foreground/70 hover:text-foreground flex items-center gap-1">
+            <BookOpen className="w-3.5 h-3.5" /> コラム
+          </Link>
           <Link href="/guide" className="text-xs font-bold text-foreground/70 hover:text-foreground">ご利用ガイド</Link>
           <Link href="/mypage" className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center font-bold text-xs border border-border transition-colors hover:border-primary">M</Link>
         </div>
@@ -1358,17 +1499,17 @@ export default function DashboardPage() {
         {/* =======================
             左カラム: トレンド & タグ 
         ======================== */}
-        <div className="hidden xl:block xl:col-span-3">
+        <div className="hidden xl:block xl:col-span-2">
           <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar space-y-6 pb-20">
-            
-            <div className="bg-card border border-border p-6 rounded-3xl shadow-sm">
-              <h3 className="font-extrabold flex items-center gap-2 mb-4 text-foreground">
+
+            <div className="bg-card border border-border p-4 rounded-3xl shadow-sm">
+              <h3 className="font-extrabold flex items-center gap-2 mb-4 text-foreground text-xs">
                 <TrendingUp className="w-5 h-5 text-primary" /> 探す・見つける
               </h3>
               <div className="space-y-1 mt-4">
-                <button 
-                  onClick={() => handleTrendClick(null)} 
-                  className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-[13px] transition-colors border ${viewMode.type === 'trend' && !viewMode.value ? 'bg-primary text-white border-primary shadow-md' : 'border-transparent text-foreground hover:bg-secondary'}`}
+                <button
+                  onClick={() => handleTrendClick(null)}
+                  className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-colors border ${viewMode.type === 'trend' && !viewMode.value ? 'bg-primary text-white border-primary shadow-md' : 'border-transparent text-foreground hover:bg-secondary'}`}
                 >
                   <TrendingUp className="w-4 h-4" /> 総合トレンド
                 </button>
@@ -1379,7 +1520,7 @@ export default function DashboardPage() {
                       {t.rank}
                     </div>
                     <div className="flex-1">
-                      <div className="font-bold text-[13px] group-hover:text-primary transition-colors line-clamp-1">{t.name}</div>
+                      <div className="font-bold text-xs group-hover:text-primary transition-colors line-clamp-1">{t.name}</div>
                     </div>
                     <ChevronRight className="w-4 h-4 text-border group-hover:text-primary transition-colors" />
                   </div>
@@ -1387,8 +1528,8 @@ export default function DashboardPage() {
               </div>
             </div>
 
-            <div className="bg-card border border-border p-6 rounded-3xl shadow-sm">
-              <h3 className="font-extrabold flex items-center gap-2 mb-4 text-foreground">
+            <div className="bg-card border border-border p-4 rounded-3xl shadow-sm">
+              <h3 className="font-extrabold flex items-center gap-2 mb-4 text-foreground text-xs">
                 <Hash className="w-5 h-5 text-accent" /> 発見タグ
               </h3>
               <div className="flex flex-wrap gap-2">
@@ -1405,7 +1546,7 @@ export default function DashboardPage() {
         {/* =======================
             中央メイン: ユーザー設定＆動画一覧 
         ======================== */}
-        <div className="xl:col-span-6 min-w-0 flex flex-col">
+        <div className="xl:col-span-8 min-w-0 flex flex-col">
           
           {/* 最上位ナビゲーションタブ (PC/タブレット用) */}
           <div className="hidden sm:flex bg-card border border-border p-1.5 rounded-[2rem] items-center mb-6 shadow-sm overflow-hidden z-20">
@@ -1443,9 +1584,9 @@ export default function DashboardPage() {
         {/* =======================
             右カラム: マネタイズ枠
         ======================== */}
-        <div className="hidden xl:block xl:col-span-3">
+        <div className="hidden xl:block xl:col-span-2">
           <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar space-y-6 pb-20">
-            
+
             <div className="text-[10px] text-foreground/40 uppercase tracking-widest font-bold pt-2 mb-3">Sponsored</div>
             
             {[...AFFILIATE_ADS].map((ad, index) => {

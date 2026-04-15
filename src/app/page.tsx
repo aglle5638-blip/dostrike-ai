@@ -87,8 +87,7 @@ export default function Home() {
             </div>
 
             <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight leading-[1.15] mb-6">
-              あなたの<span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">「ドストライク」</span>を<br />
-              AIが探し出す
+              あなたの<span className="text-transparent bg-clip-text bg-gradient-to-r from-primary to-accent">「ドストライク」</span>をAIが探し出す
             </h1>
 
             <p className="text-base md:text-lg text-foreground/70 max-w-2xl mx-auto leading-relaxed mb-10">
