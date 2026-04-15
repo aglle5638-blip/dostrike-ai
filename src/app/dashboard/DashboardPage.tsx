@@ -879,24 +879,24 @@ export default function DashboardPage() {
                               {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                             </div>
                             {/* ホバーオーバーレイ：再生 ＋ レビュー */}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
                               <a
                                 href={video.affiliateUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-5 rounded-full text-[11px] md:text-sm font-bold shadow-xl hover:scale-105 transition-transform w-full max-w-[180px]"
+                                className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <Play className="w-3.5 h-3.5 fill-current flex-shrink-0" /> サンプル再生
+                                <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
                               </a>
                               <a
                                 href={video.affiliateUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-1.5 bg-white/20 backdrop-blur-sm border border-white/40 text-white py-2 px-5 rounded-full text-[11px] md:text-sm font-bold hover:bg-white/30 transition-colors w-full max-w-[180px]"
+                                className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" /> レビューを見る
+                                <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
                               </a>
                             </div>
                           </div>
@@ -1114,24 +1114,24 @@ export default function DashboardPage() {
                       </div>
 
                       {/* ホバーオーバーレイ */}
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
                         <a
                           href={v.affiliateUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-4 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform w-full max-w-[140px]"
+                          className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <Play className="w-3 h-3 fill-current flex-shrink-0" /> サンプル再生
+                          <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
                         </a>
                         <a
                           href={v.affiliateUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="flex items-center justify-center gap-1.5 bg-white/20 border border-white/40 text-white py-2 px-4 rounded-full text-[11px] font-bold hover:bg-white/30 transition-colors w-full max-w-[140px]"
+                          className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MessageSquare className="w-3 h-3 flex-shrink-0" /> レビューを見る
+                          <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
                         </a>
                       </div>
                     </div>
@@ -1318,17 +1318,17 @@ export default function DashboardPage() {
                                   href={affiliateUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center justify-center gap-1.5 bg-white text-black py-2 px-4 rounded-full text-[11px] font-bold shadow-xl hover:scale-105 transition-transform w-full max-w-[140px]"
+                                  className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                                 >
-                                  <Play className="w-3 h-3 fill-current" /> サンプル再生
+                                  <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
                                 </a>
                                 <a
                                   href={affiliateUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="flex items-center justify-center gap-1.5 bg-white/20 border border-white/50 text-white py-2 px-4 rounded-full text-[11px] font-bold hover:bg-white/30 transition-colors w-full max-w-[140px]"
+                                  className="flex items-center justify-center gap-1 bg-white/20 border border-white/50 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                                 >
-                                  <MessageSquare className="w-3 h-3" /> レビューを見る
+                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
                                 </a>
                               </>
                             ) : (
