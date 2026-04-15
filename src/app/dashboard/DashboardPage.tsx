@@ -111,7 +111,7 @@ type ViewMode = { type: 'personal' } | { type: 'trend', value: string | null } |
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { session } = useAuth();
+  const { session, isLoading: isAuthLoading } = useAuth();
   const queryMode = searchParams.get('mode');
 
   // Modes
@@ -135,6 +135,7 @@ export default function DashboardPage() {
   // カタログ選択スロット（最大5つ）
   const [typeSlots, setTypeSlots] = useState<(FaceType | null)[]>([null, null, null, null, null]);
   const [activeSlotIndex, setActiveSlotIndex] = useState<number>(0); // 現在AIマッチを表示しているスロット
+  const [isSlotsLoading, setIsSlotsLoading] = useState(false); // DBからスロット復元中
   const [showCatalogModal, setShowCatalogModal] = useState(false);
   const [editingSlotIndex, setEditingSlotIndex] = useState<number | null>(null); // モーダルで編集中のスロット番号
   const [catalogFilter, setCatalogFilter] = useState<string>('all');
@@ -259,6 +260,7 @@ export default function DashboardPage() {
 
   // ── ログイン時にDBからスロット設定を読み込む ─────────────────────
   const loadSlotsFromDB = useCallback(async (token: string) => {
+    setIsSlotsLoading(true);
     try {
       const res = await fetch('/api/slots', {
         headers: { Authorization: `Bearer ${token}` },
@@ -275,6 +277,8 @@ export default function DashboardPage() {
       }
     } catch {
       // サイレント無視
+    } finally {
+      setIsSlotsLoading(false);
     }
   }, []);
 
@@ -537,7 +541,13 @@ export default function DashboardPage() {
 
           {/* 5 Slots — padding で X ボタン/拡大表示が絶対に見切れないよう余白確保 */}
           <div className="z-10 flex gap-3 items-end overflow-x-auto no-scrollbar pt-3 pb-2 px-1">
-            {typeSlots.map((slot, i) => {
+            {isSlotsLoading ? (
+              // スロット復元中スケルトン
+              [0,1,2,3,4].map(i => (
+                <div key={i} className={`flex-shrink-0 rounded-2xl animate-pulse bg-secondary/70 ${i === 0 ? 'w-[72px] h-[72px] md:w-[84px] md:h-[84px]' : 'w-12 h-12 md:w-14 md:h-14'}`} />
+              ))
+            ) : null}
+            {!isSlotsLoading && typeSlots.map((slot, i) => {
               const isActive = i === activeSlotIndex && slot !== null;
               /* アクティブスロットはサイズ自体を大きくする（transformは使わない） */
               const sizeClass = slot
@@ -596,7 +606,7 @@ export default function DashboardPage() {
               );
             })}
 
-            {filledSlots > 0 && (
+            {!isSlotsLoading && filledSlots > 0 && (
               <button
                 onClick={() => {
                   const emptyIdx = typeSlots.findIndex(s => s === null);
@@ -664,10 +674,20 @@ export default function DashboardPage() {
               {isLoadingVideos && (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
                   {[1,2,3,4,5,6].map(i => (
-                    <div key={i} className="flex flex-col gap-1.5">
-                      <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse" />
-                      <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-4/5" />
-                      <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-3/5" />
+                    <div key={i} className="flex flex-col gap-1.5 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                      {/* サムネイル */}
+                      <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse relative overflow-hidden">
+                        <div className="absolute top-2 left-2 w-12 h-4 bg-secondary rounded-lg animate-pulse" />
+                      </div>
+                      {/* タイトル行 */}
+                      <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-full" />
+                      <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-4/5" />
+                      {/* ボタン行 */}
+                      <div className="flex gap-1 mt-1">
+                        <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                        <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                        <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1052,6 +1072,51 @@ export default function DashboardPage() {
       </div>
     );
   };
+
+  // ── 認証確認中はページ全体スケルトンを表示 ─────────────────────
+  if (isAuthLoading) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <header className="w-full bg-card/80 backdrop-blur-md border-b border-border sticky top-0 z-50 shadow-sm flex items-center justify-between px-4 md:px-8 py-3 h-14">
+          <div className="w-8 h-8 sm:hidden" />
+          <div className="flex items-center gap-2">
+            <div className="bg-primary p-1 md:p-1.5 rounded-lg"><Video className="w-5 h-5 text-primary-foreground" /></div>
+            <span className="text-xl font-extrabold tracking-tight">ドストライク<span className="text-primary">AI</span></span>
+          </div>
+          <div className="w-8 h-8" />
+        </header>
+        <div className="flex-1 w-full px-3 md:px-6 lg:px-8 py-4 md:py-8 lg:py-10 grid grid-cols-1 xl:grid-cols-12 gap-5 lg:gap-8">
+          <div className="xl:col-span-6 xl:col-start-4 space-y-4">
+            {/* スロットエリアスケルトン */}
+            <div className="bg-card border border-border p-4 rounded-2xl shadow-md">
+              <div className="h-4 w-40 bg-secondary/60 rounded-full animate-pulse mb-2" />
+              <div className="h-3 w-64 bg-secondary/40 rounded-full animate-pulse mb-4" />
+              <div className="flex gap-3 pt-1">
+                {[0,1,2,3,4].map(i => (
+                  <div key={i} className={`rounded-2xl animate-pulse bg-secondary/70 flex-shrink-0 ${i === 0 ? 'w-[72px] h-[72px]' : 'w-12 h-12'}`} />
+                ))}
+              </div>
+            </div>
+            {/* ビデオグリッドスケルトン */}
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-5 mt-4">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="flex flex-col gap-1.5">
+                  <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse" />
+                  <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-full" />
+                  <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-4/5" />
+                  <div className="flex gap-1 mt-1">
+                    <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                    <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                    <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
