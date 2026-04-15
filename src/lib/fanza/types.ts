@@ -129,10 +129,17 @@ export interface FeedbackRequest {
   videoId: string;
   action: 'keep' | 'strike' | '';  // '' = 解除
   faceTypeId?: string;              // フィードバック時のアクティブタイプ
+  videoMeta?: Pick<VideoResult, 'title' | 'thumbnailUrl' | 'affiliateUrl' | 'actress' | 'matchScore' | 'tags' | 'price' | 'reviewAverage' | 'durationMin'>;
 }
 
 export interface FeedbackResponse {
   success: boolean;
   videoId: string;
   action: string;
+}
+
+/** GET /api/videos/feedback のレスポンス */
+export interface FeedbackListResponse {
+  feedback: Record<string, string>;                    // videoId → action
+  videoMeta: Record<string, FeedbackRequest['videoMeta']>; // videoId → metadata
 }

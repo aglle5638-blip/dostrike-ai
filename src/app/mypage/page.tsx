@@ -12,7 +12,6 @@ import {
   LogOut,
   LogIn,
   Loader2,
-  Crown,
   User,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
@@ -139,23 +138,6 @@ export default function MyPage() {
               </div>
             </div>
 
-            {/* VIP バナー */}
-            <Link
-              href="/vip"
-              className="block bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 p-5 rounded-2xl mb-8 flex items-center gap-4 hover:border-primary/40 transition-colors group"
-            >
-              <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center flex-shrink-0 shadow-[0_4px_14px_rgba(244,63,94,0.3)]">
-                <Crown className="w-6 h-6 text-white" />
-              </div>
-              <div className="flex-1">
-                <p className="font-extrabold text-sm">VIPプランにアップグレード</p>
-                <p className="text-xs text-foreground/50 mt-0.5">広告なし・無制限キープ・優先推薦など特典多数</p>
-              </div>
-              <span className="text-primary text-xs font-bold group-hover:translate-x-1 transition-transform">
-                詳細 →
-              </span>
-            </Link>
-
             {/* 設定グリッド */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
               <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 cursor-pointer transition-colors group">
@@ -170,20 +152,17 @@ export default function MyPage() {
                 </div>
               </div>
 
-              <Link
-                href="/vip"
-                className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 transition-colors group"
-              >
-                <div className="bg-blue-500/10 p-3 rounded-full text-blue-500 group-hover:bg-blue-500 group-hover:text-white transition-colors">
+              <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 opacity-50 cursor-not-allowed">
+                <div className="bg-blue-500/10 p-3 rounded-full text-blue-500">
                   <CreditCard className="w-5 h-5" />
                 </div>
                 <div>
                   <h3 className="font-bold mb-1">支払い・プラン変更</h3>
                   <p className="text-xs text-foreground/50 leading-relaxed">
-                    VIPプランへのアップグレード等。
+                    準備中です。しばらくお待ちください。
                   </p>
                 </div>
-              </Link>
+              </div>
 
               <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 cursor-pointer transition-colors group">
                 <div className="bg-purple-500/10 p-3 rounded-full text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-colors">
