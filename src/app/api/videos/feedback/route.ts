@@ -1,19 +1,25 @@
 /**
  * POST /api/videos/feedback   - キープ/ストライクを保存
  * GET  /api/videos/feedback   - ユーザーのフィードバック一覧を取得
- * DELETE /api/videos/feedback - フィードバックを削除（action を '' にリセット）
  *
- * Supabase 未設定時はエラーを返さず { success: true } を返す（フロントはローカルステートで管理）。
- * Supabase 設定後は DB に永続化し、デバイス間で同期する。
+ * Authorization: Bearer <supabase-access-token> ヘッダーが必要。
+ * 未認証の場合は { success: true } / { feedback: {} } を返す（ローカルステートで管理）。
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { createAnonServerClient } from '@/lib/supabase/server';
+import { createAuthedClient } from '@/lib/supabase/server';
 import type { FeedbackRequest, FeedbackResponse } from '@/lib/fanza/types';
 
 const VALID_ACTIONS = ['keep', 'strike', ''] as const;
 
-// ─── POST: フィードバック保存 ──────────────────────────────────────
+/** Authorization ヘッダーからトークンを取り出す */
+function extractToken(req: NextRequest): string | null {
+  const header = req.headers.get('authorization');
+  if (header?.startsWith('Bearer ')) return header.slice(7);
+  return null;
+}
+
+// ─── POST: フィードバック保存 ─────────────────────────────────────
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<FeedbackRequest>;
@@ -23,37 +29,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'videoId が必要です' }, { status: 400 });
     }
     if (action === undefined || !VALID_ACTIONS.includes(action as typeof VALID_ACTIONS[number])) {
-      return NextResponse.json(
-        { error: `action は keep | strike | '' のいずれかです` },
-        { status: 400 }
-      );
+      return NextResponse.json({ error: 'action は keep | strike | \'\' のいずれかです' }, { status: 400 });
     }
 
-    const supabase = createAnonServerClient();
+    const token = extractToken(req);
+    if (!token) {
+      // 未認証: フロントのローカルステートに任せる
+      return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
+    }
 
-    // ── Supabase 未設定時: フロントのローカルステートに任せる ────────
+    const supabase = createAuthedClient(token);
     if (!supabase) {
       return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
     }
 
-    // ── ユーザー認証確認 ──────────────────────────────────────────
-    // Authorization: Bearer <supabase-access-token> ヘッダーを期待
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      // 未認証でも 401 にしない（匿名ユーザーはローカルステートで管理）
-      return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
-    }
-
-    const token = authHeader.slice(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
+    // ── ユーザー確認 ──────────────────────────────────────────────
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
     }
 
-    // ── DB 書き込み（upsert） ──────────────────────────────────────
+    // ── DB 書き込み ───────────────────────────────────────────────
     if (action === '') {
-      // 空文字 = 解除 → レコード自体を削除
+      // 解除 → レコード削除
       await supabase
         .from('user_feedback')
         .delete()
@@ -66,7 +64,7 @@ export async function POST(req: NextRequest) {
         action:       action as 'keep' | 'strike',
         face_type_id: faceTypeId ?? null,
         updated_at:   new Date().toISOString(),
-      });
+      }, { onConflict: 'user_id,video_id' });
     }
 
     return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);
@@ -79,22 +77,14 @@ export async function POST(req: NextRequest) {
 // ─── GET: フィードバック一覧 ──────────────────────────────────────
 export async function GET(req: NextRequest) {
   try {
-    const supabase = createAnonServerClient();
-    if (!supabase) {
-      return NextResponse.json({ feedback: {} });
-    }
+    const token = extractToken(req);
+    if (!token) return NextResponse.json({ feedback: {} });
 
-    const authHeader = req.headers.get('authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return NextResponse.json({ feedback: {} });
-    }
+    const supabase = createAuthedClient(token);
+    if (!supabase) return NextResponse.json({ feedback: {} });
 
-    const token = authHeader.slice(7);
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-
-    if (authError || !user) {
-      return NextResponse.json({ feedback: {} });
-    }
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) return NextResponse.json({ feedback: {} });
 
     const { data, error } = await supabase
       .from('user_feedback')
@@ -104,7 +94,6 @@ export async function GET(req: NextRequest) {
 
     if (error) throw error;
 
-    // { videoId: action } のマップで返す（フロントの feedback state と同形）
     const feedback: Record<string, string> = {};
     for (const row of data ?? []) {
       feedback[row.video_id] = row.action;

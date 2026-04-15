@@ -1,10 +1,11 @@
 "use client";
 
 import { Crown, Sparkles, Play, Loader2, Plus, X, Video, ThumbsUp, ThumbsDown, Heart, TrendingUp, ChevronRight, Hash, Clock, Filter, ChevronDown, Search, BookOpen } from "lucide-react";
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { VideoResult, RecommendResponse, SortBy } from "@/lib/fanza/types";
+import { useAuth } from "@/components/AuthProvider";
 
 // ============================================================
 // 30パターン 顔系統カタログ定義
@@ -110,7 +111,7 @@ type ViewMode = { type: 'personal' } | { type: 'trend', value: string | null } |
 export default function DashboardPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // Remove static isVip since we use useState for it now
+  const { session } = useAuth();
   const queryMode = searchParams.get('mode');
 
   // Modes
@@ -241,9 +242,48 @@ export default function DashboardPage() {
     </div>
   );
 
-  const handleFeedback = (seedPath: string, action: 'strike'|'change'|'keep'|'') => {
-    setFeedback(prev => ({...prev, [seedPath]: action}));
-    
+  // ── ログイン時にDBからfeedbackを読み込む ─────────────────────────
+  const loadFeedbackFromDB = useCallback(async (token: string) => {
+    try {
+      const res = await fetch('/api/videos/feedback', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (data.feedback && typeof data.feedback === 'object') {
+        setFeedback(prev => ({ ...prev, ...data.feedback }));
+      }
+    } catch {
+      // ロード失敗はサイレントに無視（ローカルステートで継続）
+    }
+  }, []);
+
+  useEffect(() => {
+    if (session?.access_token) {
+      loadFeedbackFromDB(session.access_token);
+    }
+  }, [session?.access_token, loadFeedbackFromDB]);
+
+  // ── フィードバック処理（ローカル更新 + DB保存） ────────────────────
+  const handleFeedback = (videoId: string, action: 'strike'|'change'|'keep'|'') => {
+    // 楽観的UI更新（即座に反映）
+    setFeedback(prev => ({...prev, [videoId]: action}));
+
+    // DB保存（ログイン中 かつ change以外）
+    if (session?.access_token && action !== 'change') {
+      fetch('/api/videos/feedback', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          videoId,
+          action,
+          faceTypeId: typeSlots[activeSlotIndex]?.id ?? null,
+        }),
+      }).catch(() => {}); // fire-and-forget
+    }
+
     // Interstitial Ad Logic trigger (4アクションごとに表示)
     if (!isVip) {
        setInteractionCount(prev => {
@@ -252,8 +292,8 @@ export default function DashboardPage() {
              setTimeout(() => {
                 setInterstitialAdIndex(prevIdx => (prevIdx + 1) % AFFILIATE_ADS.length);
                 setShowInterstitialAd(true);
-             }, 400); // 押したあとのUI演出を見せて少し間を置いてポップアップ
-             return 0; // reset
+             }, 400);
+             return 0;
           }
           return next;
        });
@@ -261,23 +301,37 @@ export default function DashboardPage() {
   };
 
   // 保存リスト画面専用：Undoトースト付きの解除ハンドラ
-  const handleKeepRemove = (seed: string, prevAction: string) => {
+  const handleKeepRemove = (videoId: string, prevAction: string) => {
     // 既存のトーストがあればタイマーをキャンセルして即コミット
     if (undoToast) {
       clearTimeout(undoToast.timerId);
       setFeedback(prev => ({ ...prev, [undoToast.seed]: '' }));
+      // 直前のundoToastのDB削除も確定
+      if (session?.access_token) {
+        fetch('/api/videos/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ videoId: undoToast.seed, action: '' }),
+        }).catch(() => {});
+      }
     }
 
-    // 解除したことをUIに即反映（feedbackを''にするが、undoToastで追跡）
     const label = prevAction === 'keep' ? '💛 キープ' : '👍 ドストライク';
     const timerId = setTimeout(() => {
-      // 5秒後：正式にfeedbackから削除
-      setFeedback(prev => ({ ...prev, [seed]: '' }));
+      // 5秒後：正式にfeedbackから削除してDBも更新
+      setFeedback(prev => ({ ...prev, [videoId]: '' }));
       setUndoToast(null);
+      if (session?.access_token) {
+        fetch('/api/videos/feedback', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+          body: JSON.stringify({ videoId, action: '' }),
+        }).catch(() => {});
+      }
     }, 5000);
 
-    setFeedback(prev => ({ ...prev, [seed]: '__removed__' }));
-    setUndoToast({ seed, prevAction, message: `${label}を解除しました`, timerId });
+    setFeedback(prev => ({ ...prev, [videoId]: '__removed__' }));
+    setUndoToast({ seed: videoId, prevAction, message: `${label}を解除しました`, timerId });
   };
 
   const handleUndo = () => {
