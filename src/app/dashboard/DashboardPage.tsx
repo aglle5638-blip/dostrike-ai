@@ -257,11 +257,65 @@ export default function DashboardPage() {
     }
   }, []);
 
+  // ── ログイン時にDBからスロット設定を読み込む ─────────────────────
+  const loadSlotsFromDB = useCallback(async (token: string) => {
+    try {
+      const res = await fetch('/api/slots', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (Array.isArray(data.slot_ids)) {
+        const restored = data.slot_ids.map((id: string | null) =>
+          id ? TYPE_CATALOG.find(t => t.id === id) ?? null : null
+        );
+        setTypeSlots(restored);
+        // 最初に埋まっているスロットをアクティブに設定
+        const firstFilled = restored.findIndex((s: FaceType | null) => s !== null);
+        if (firstFilled >= 0) setActiveSlotIndex(firstFilled);
+      }
+    } catch {
+      // サイレント無視
+    }
+  }, []);
+
+  // スロット変更をDBに保存（デバウンス）
+  const saveSlotsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveSlotsToDBRef = useRef<((slots: (FaceType | null)[], token: string) => void) | undefined>(undefined);
+  saveSlotsToDBRef.current = (slots, token) => {
+    if (saveSlotsTimerRef.current) clearTimeout(saveSlotsTimerRef.current);
+    saveSlotsTimerRef.current = setTimeout(() => {
+      const slot_ids = slots.map(s => s?.id ?? null);
+      fetch('/api/slots', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ slot_ids }),
+      }).catch(() => {});
+    }, 800);
+  };
+
   useEffect(() => {
     if (session?.access_token) {
       loadFeedbackFromDB(session.access_token);
+      loadSlotsFromDB(session.access_token);
     }
-  }, [session?.access_token, loadFeedbackFromDB]);
+  }, [session?.access_token, loadFeedbackFromDB, loadSlotsFromDB]);
+
+  // スロット変更時に自動保存
+  const isFirstSlotLoad = useRef(true);
+  useEffect(() => {
+    // 初回レンダリングはスキップ（DBからの復元が済む前に上書きしない）
+    if (isFirstSlotLoad.current) {
+      isFirstSlotLoad.current = false;
+      return;
+    }
+    if (session?.access_token) {
+      saveSlotsToDBRef.current?.(typeSlots, session.access_token);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typeSlots, session?.access_token]);
 
   // ── フィードバック処理（ローカル更新 + DB保存） ────────────────────
   const handleFeedback = (videoId: string, action: 'strike'|'change'|'keep'|'') => {
@@ -782,13 +836,6 @@ export default function DashboardPage() {
       </div>
       <div className="flex gap-2.5 overflow-x-auto no-scrollbar snap-x pb-2 w-full px-1">
          
-         {/* VIP Upsell */}
-         <Link href="/vip" className="snap-start flex-shrink-0 w-[200px] bg-gradient-to-br from-card to-primary/5 border border-primary/20 p-3 rounded-xl shadow-sm relative overflow-hidden group flex flex-col justify-center">
-            <h3 className="font-extrabold text-sm mb-0.5 text-foreground flex items-center gap-1.5"><Crown className="w-4 h-4 text-yellow-500" /> ディープマッチ</h3>
-            <p className="text-[10px] text-foreground/60 mb-2 line-clamp-1 leading-snug">VIPで無制限にAIが学習。</p>
-            <div className="w-full py-1.5 bg-primary text-primary-foreground font-bold text-[11px] text-center rounded-md shadow-sm">VIP機能を試す</div>
-         </Link>
-
          {/* Ads */}
          {AFFILIATE_ADS.map((ad, index) => {
             const adImgId = AD_IMAGES[ad.imgIndex % AD_IMAGES.length];
@@ -1022,9 +1069,6 @@ export default function DashboardPage() {
         
         <div className="hidden sm:flex items-center gap-3 w-auto justify-end">
           <Link href="/guide" className="text-xs font-bold text-foreground/70 hover:text-foreground">ご利用ガイド</Link>
-          <Link href="/vip" className="bg-primary/10 text-primary hover:bg-primary hover:text-primary-foreground border border-primary/20 px-4 py-1.5 rounded-full text-xs font-bold transition-colors">
-            VIP登録
-          </Link>
           <Link href="/mypage" className="w-8 h-8 rounded-full bg-secondary flex items-center justify-center font-bold text-xs border border-border transition-colors hover:border-primary">M</Link>
         </div>
         
@@ -1129,16 +1173,6 @@ export default function DashboardPage() {
         <div className="hidden xl:block xl:col-span-3">
           <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar space-y-6 pb-20">
             
-            <div className="bg-gradient-to-br from-card to-primary/5 border border-primary/20 p-6 rounded-3xl shadow-sm relative overflow-hidden group hover:border-primary/40 transition-colors cursor-pointer">
-              <div className="absolute top-0 right-0 -mr-4 -mt-4 w-28 h-28 bg-primary/10 rounded-full blur-xl group-hover:bg-primary/20 transition-colors" />
-              <Crown className="w-8 h-8 text-yellow-500 mb-4" />
-              <h3 className="font-extrabold text-lg mb-2 text-foreground">より深いディープマッチ</h3>
-              <p className="text-xs text-foreground/60 mb-6 leading-relaxed font-medium">VIPプランなら無制限にAIが学習。世界トップクラスの精度であなたの本当の性癖・好みを抽出します。</p>
-              <Link href="/vip" className="block text-center w-full py-3 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-colors shadow-[0_4px_14px_0_rgba(244,63,94,0.39)]">
-                VIP機能を3日間試す
-              </Link>
-            </div>
-
             <div className="text-[10px] text-foreground/40 uppercase tracking-widest font-bold pt-2 mb-3">Sponsored</div>
             
             {[...AFFILIATE_ADS].map((ad, index) => {
@@ -1201,11 +1235,6 @@ export default function DashboardPage() {
               </button>
             </div>
             
-            <div className="p-4 bg-secondary/30 text-center border-t border-border/50">
-               <Link href="/vip" className="text-xs font-extrabold text-foreground/50 hover:text-foreground underline underline-offset-4 decoration-foreground/30 transition-colors">
-                 VIP登録してこの広告を非表示にする
-               </Link>
-            </div>
           </div>
         </div>
       )}
