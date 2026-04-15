@@ -1,5 +1,12 @@
 import { Suspense } from 'react';
 import DashboardPage from './DashboardPage';
+import type { Metadata } from 'next';
+
+export const metadata: Metadata = {
+  title: "AIマッチ ダッシュボード",
+  description: "あなたの好みに合わせたAI推薦動画を確認できます。",
+  robots: { index: false, follow: false },
+};
 
 /**
  * Next.js 本番ビルド要件:

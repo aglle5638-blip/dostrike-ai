@@ -1,5 +1,12 @@
 import Link from "next/link";
 import { Crown, CheckCircle2, ChevronRight, Play, Star, Settings2, ImagePlus, EyeOff, Infinity, ArrowLeft } from "lucide-react";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "VIPプラン",
+  description: "広告なし・無制限キープ・優先AI推薦。ドストライクAI VIPプランで最高のキュレーション体験を。",
+  robots: { index: false },
+};
 
 export default function VipPage() {
   return (

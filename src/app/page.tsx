@@ -1,5 +1,19 @@
 import { ArrowRight, Play, Sparkles } from "lucide-react";
 import Link from "next/link";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "ドストライクAI | AIがあなたのドストライクを探し出す",
+  description:
+    "顔写真を登録するだけ。最新AIが骨格・パーツを高次元解析し、数万本の中からあなただけのドストライク動画をキュレーション。完全無料で今すぐ試せます。※18歳以上限定",
+  alternates: { canonical: "https://dostrike-ai.vercel.app" },
+  openGraph: {
+    url: "https://dostrike-ai.vercel.app",
+    title: "ドストライクAI | AIがあなたのドストライクを探し出す",
+    description:
+      "顔写真を登録するだけ。AIが数万本の中からあなただけのドストライク動画をキュレーション。",
+  },
+};
 
 export default function Home() {
   return (

@@ -11,9 +11,66 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
+const BASE_URL = "https://dostrike-ai.vercel.app";
+const SITE_NAME = "ドストライクAI";
+const DEFAULT_DESCRIPTION =
+  "AIがあなたの好みの顔タイプを解析し、数万本の中から最もマッチする動画を独自スコアで推薦。30種類のタイプから選ぶだけで、あなただけのパーソナルキュレーションが完成します。※18歳以上限定";
+
 export const metadata: Metadata = {
-  title: "ドストライクAI | あなたの好みを完全解析する動画キュレーション",
-  description: "AIがあなたの好みの顔を完全解析し、最もマッチするプレミアムコンテンツを独自のスコアで推薦する次世代プラットフォーム。",
+  metadataBase: new URL(BASE_URL),
+
+  // ── 基本 ──────────────────────────────────────────────────────
+  title: {
+    default: `${SITE_NAME} | AIがあなたのドストライクを探し出す`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: DEFAULT_DESCRIPTION,
+  keywords: ["AI", "動画", "キュレーション", "マッチング", "アダルト", "FANZA", "おすすめ"],
+  authors: [{ name: "ドストライクAI 運営事務局" }],
+  creator: "ドストライクAI",
+
+  // ── OGP (Open Graph) ─────────────────────────────────────────
+  openGraph: {
+    type: "website",
+    locale: "ja_JP",
+    url: BASE_URL,
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} | AIがあなたのドストライクを探し出す`,
+    description: DEFAULT_DESCRIPTION,
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `${SITE_NAME} – AIがあなたのドストライクを探し出す`,
+      },
+    ],
+  },
+
+  // ── Twitter / X Card ────────────────────────────────────────
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} | AIがあなたのドストライクを探し出す`,
+    description: DEFAULT_DESCRIPTION,
+    images: ["/opengraph-image"],
+  },
+
+  // ── Robots ───────────────────────────────────────────────────
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+
+  // ── その他 ───────────────────────────────────────────────────
+  alternates: {
+    canonical: BASE_URL,
+  },
 };
 
 export default function RootLayout({
