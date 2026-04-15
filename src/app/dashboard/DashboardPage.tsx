@@ -233,7 +233,7 @@ export default function DashboardPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const SORT_OPTIONS = [
-    { value: 'match', label: '⚡️ ドストライク順' },
+    { value: 'match', label: '⚡️ いいね順' },
     { value: 'rank', label: '🔥 売上ランキング順' },
     { value: 'date', label: '🆕 新着・配信開始日順' },
     { value: 'review', label: '⭐ レビュー最高評価順' },
@@ -475,7 +475,7 @@ export default function DashboardPage() {
       }
     }
 
-    const label = prevAction === 'keep' ? '💛 キープ' : '👍 ドストライク';
+    const label = prevAction === 'keep' ? '💛 キープ' : '👍 いいね';
     const timerId = setTimeout(() => {
       // 5秒後：正式にfeedbackから削除してDBも更新
       setFeedback(prev => ({ ...prev, [videoId]: '' }));
@@ -584,14 +584,14 @@ export default function DashboardPage() {
                 <button
                   key={type.id}
                   onClick={() => handleTypeSelect(type)}
-                  className={`relative flex flex-col items-center gap-1.5 p-2 rounded-2xl border-2 transition-all duration-200 ${
+                  className={`relative flex flex-col items-center gap-1 p-1.5 rounded-xl border-2 transition-all duration-200 ${
                     isSelected
                       ? 'border-primary bg-primary/10 shadow-[0_0_12px_rgba(244,63,94,0.25)]'
                       : 'border-border/50 bg-secondary/30 hover:border-primary/50 hover:bg-card'
                   }`}
                 >
                   <div
-                    className="w-full aspect-square rounded-xl overflow-hidden relative"
+                    className="w-full aspect-square rounded-lg overflow-hidden relative"
                     onClick={(e) => {
                       e.stopPropagation();
                       setPreviewFace(type);
@@ -612,12 +612,7 @@ export default function DashboardPage() {
                       </div>
                     )}
                   </div>
-                  <p className="text-[10px] font-bold text-center leading-tight text-foreground line-clamp-2">{type.name}</p>
-                  <div className="flex flex-wrap gap-1 justify-center">
-                    {type.tags.slice(0, 2).map(tag => (
-                      <span key={tag} className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full ${type.groupColor}`}>{tag}</span>
-                    ))}
-                  </div>
+                  <p className="text-[9px] font-bold text-center leading-tight text-foreground line-clamp-1 w-full">{type.name}</p>
                 </button>
               );
             })}
@@ -630,27 +625,38 @@ export default function DashboardPage() {
           className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm"
           onClick={() => setPreviewFace(null)}
         >
-          <div className="relative max-w-sm w-[80vw] animate-in zoom-in-95 duration-200">
+          <div
+            className="relative max-w-sm w-[80vw] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={`/faces/${previewFace.id}.jpg`}
               alt={previewFace.name}
               className="w-full rounded-3xl shadow-2xl object-cover"
             />
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent rounded-b-3xl p-5">
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent rounded-b-3xl p-5">
               <p className="text-white font-extrabold text-lg">{previewFace.name}</p>
               <div className="flex gap-1 mt-1 flex-wrap">
                 {previewFace.tags.map(tag => (
                   <span key={tag} className="text-white/70 text-xs font-bold">{tag}</span>
                 ))}
               </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => { handleTypeSelect(previewFace); setPreviewFace(null); }}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-full font-extrabold text-sm hover:bg-primary/90 transition-colors shadow-lg"
+                >
+                  このタイプを選ぶ ✓
+                </button>
+                <button
+                  onClick={() => setPreviewFace(null)}
+                  className="px-4 py-2.5 bg-white/20 text-white rounded-full font-bold text-sm hover:bg-white/30 transition-colors"
+                >
+                  戻る
+                </button>
+              </div>
             </div>
-            <button
-              onClick={() => setPreviewFace(null)}
-              className="absolute top-3 right-3 w-9 h-9 bg-black/60 text-white rounded-full flex items-center justify-center hover:bg-black transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         </div>
       )}
@@ -670,11 +676,9 @@ export default function DashboardPage() {
         {/* タイプ選択エリア */}
         <div className="flex flex-col bg-card border border-border p-3 md:p-4 rounded-2xl gap-3 shadow-md relative overflow-hidden mb-5">
           <div className="absolute top-0 right-0 p-24 bg-primary/5 blur-[100px] rounded-full -z-10" />
-          <div className="z-10">
-            <h2 className="text-base md:text-lg font-extrabold tracking-tight">あなたの好きなタイプ</h2>
-            <p className="text-foreground/70 leading-snug text-[10px] md:text-xs mt-0.5">
-              30パターンから好みのタイプを選ぶだけでOK。最大5つ登録できます。
-            </p>
+          <div className="z-10 flex items-baseline gap-2 flex-wrap">
+            <h2 className="text-sm md:text-base font-extrabold tracking-tight whitespace-nowrap">あなたの好きなタイプ</h2>
+            <p className="text-foreground/50 text-[10px] font-bold whitespace-nowrap">30パターン・最大5つ登録</p>
           </div>
 
           {/* 5 Slots — padding で X ボタン/拡大表示が絶対に見切れないよう余白確保 */}
@@ -799,7 +803,7 @@ export default function DashboardPage() {
 
               {/* Loading skeleton */}
               {isLoadingVideos && (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
                   {[1,2,3,4,5,6].map(i => (
                     <div key={i} className="flex flex-col gap-1.5 pb-5 md:pb-6 border-b border-border/20 md:border-none">
                       {/* サムネイル */}
@@ -846,7 +850,7 @@ export default function DashboardPage() {
 
               {/* Video grid */}
               {!isLoadingVideos && !videoError && videos.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-2 md:gap-5 mt-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
                   {videos.map((video) => {
                     const fb = feedback[video.id];
                     if (fb === 'change') {
@@ -872,7 +876,7 @@ export default function DashboardPage() {
                                 <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
                               )}
                               {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
-                              {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> アリ！</div>}
+                              {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                             </div>
                             {/* ホバーオーバーレイ：再生 ＋ レビュー */}
                             <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
@@ -929,7 +933,7 @@ export default function DashboardPage() {
                                 <div className="flex items-center gap-1 mt-0.5">
                                   <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
                                   <span className="text-[9px] text-foreground/40 font-bold">
-                                    {stat.total}人中 <span className="text-primary">{pct}%</span>がドストライク判定
+                                    {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
                                   </span>
                                 </div>
                               );
@@ -946,7 +950,7 @@ export default function DashboardPage() {
                           </button>
                           <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
                             <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
-                            <span>ストライク</span>
+                            <span>いいね</span>
                           </button>
                         </div>
                       </div>
@@ -1104,7 +1108,7 @@ export default function DashboardPage() {
                         )}
                         {fb === 'strike' && (
                           <div className="bg-primary text-white px-2 py-0.5 rounded-lg flex items-center shadow-lg font-bold text-[10px] whitespace-nowrap">
-                            <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> アリ！
+                            <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> いいね
                           </div>
                         )}
                       </div>
@@ -1159,7 +1163,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1 mt-0.5">
                           <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
                           <span className="text-[9px] text-foreground/40 font-bold">
-                            {stat.total}人中 <span className="text-primary">{Math.round((stat.strikeCount / stat.total) * 100)}%</span>がドストライク
+                            {stat.total}人中 <span className="text-primary">{Math.round((stat.strikeCount / stat.total) * 100)}%</span>がいいね
                           </span>
                         </div>
                       )}
@@ -1185,7 +1189,7 @@ export default function DashboardPage() {
                       className={`flex-1 flex items-center justify-center gap-1 py-2 rounded-full font-bold text-[10px] transition-all ${fb === 'strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}
                     >
                       <ThumbsUp className="w-3 h-3 flex-shrink-0" />
-                      <span>ドスト</span>
+                      <span>いいね</span>
                     </button>
                   </div>
                 </div>
@@ -1211,7 +1215,7 @@ export default function DashboardPage() {
          {renderFeedHeader(<><Heart className="w-4 h-4 md:w-6 md:h-6 text-yellow-400 fill-yellow-400 flex-shrink-0 mr-1.5" /> <span className="truncate">保存リスト</span></>)}
          
          <p className="text-foreground/70 leading-snug text-[10px] md:text-sm mt-3 hidden sm:block">
-           動画で「キープ」または「ドストライク！」を押した動画の一覧が表示されます。
+           動画で「キープ」または「いいね」を押した動画の一覧が表示されます。
          </p>
          
          <div className="flex mt-4 mb-5">
@@ -1232,7 +1236,7 @@ export default function DashboardPage() {
                 onClick={() => setKeepFilter('strike')} 
                 className={`flex-1 sm:flex-none px-4 py-2 rounded-full text-xs font-bold whitespace-nowrap transition-all ${keepFilter === 'strike' ? 'bg-primary shadow-sm text-white' : 'text-foreground/50 hover:text-foreground'}`}
               >
-                👍 ドストライク
+                👍 いいね
               </button>
             </div>
          </div>
@@ -1241,7 +1245,7 @@ export default function DashboardPage() {
            <p className="text-xs text-foreground/40 font-bold mb-4">{keepEntries.length}件保存中</p>
          )}
 
-         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
+         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
             {keepEntries.length === 0 ? (
                <div className="col-span-full py-20 flex flex-col items-center justify-center text-center">
                   <div className="w-16 h-16 rounded-full bg-secondary flex items-center justify-center mb-4">
@@ -1302,7 +1306,7 @@ export default function DashboardPage() {
                           )}
                           {action === 'strike' && (
                             <div className="absolute top-2 right-2 bg-primary text-white px-2 py-0.5 flex items-center rounded-lg shadow-lg font-bold text-[10px] whitespace-nowrap">
-                              <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> ストライク
+                              <ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0" /> いいね
                             </div>
                           )}
 
@@ -1375,7 +1379,7 @@ export default function DashboardPage() {
                               <div className="flex items-center gap-1 mt-0.5">
                                 <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
                                 <span className="text-[9px] text-foreground/40 font-bold">
-                                  {stat.total}人中 <span className="text-primary">{pct}%</span>がドストライク判定
+                                  {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
                                 </span>
                               </div>
                             );
@@ -1406,7 +1410,7 @@ export default function DashboardPage() {
                             <div className={`flex flex-1 items-center justify-center gap-1 py-1.5 rounded-full font-bold text-[9px] md:text-[10px] ${action === 'keep' ? 'bg-yellow-400/20 text-yellow-600 border border-yellow-400/30' : 'bg-primary/10 text-primary border border-primary/20'}`}>
                               {action === 'keep'
                                 ? <><Heart className="w-3 h-3 fill-current flex-shrink-0" /><span>キープ中</span></>
-                                : <><ThumbsUp className="w-3 h-3 fill-current flex-shrink-0" /><span>ストライク中</span></>}
+                                : <><ThumbsUp className="w-3 h-3 fill-current flex-shrink-0" /><span>いいね中</span></>}
                             </div>
                           )}
                       </div>
@@ -1549,27 +1553,27 @@ export default function DashboardPage() {
         <div className="xl:col-span-8 min-w-0 flex flex-col">
           
           {/* 最上位ナビゲーションタブ (PC/タブレット用) */}
-          <div className="hidden sm:flex bg-card border border-border p-1.5 rounded-[2rem] items-center mb-6 shadow-sm overflow-hidden z-20">
-            <button 
-              onClick={() => setViewMode({ type: 'personal' })} 
-              className={`flex-1 py-3 text-sm md:text-base font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
+          <div className="hidden sm:flex bg-card border border-border p-1 rounded-[2rem] items-center mb-4 shadow-sm overflow-hidden z-20">
+            <button
+              onClick={() => setViewMode({ type: 'personal' })}
+              className={`flex-1 py-2 text-xs md:text-sm font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
                 ${viewMode.type === 'personal' ? 'bg-primary text-white shadow-md scale-100' : 'text-foreground/50 hover:text-foreground hover:bg-secondary scale-95'}`}
             >
-              <Sparkles className="w-4 h-4" /> 🎯 ドストライク選抜
+              <Sparkles className="w-3.5 h-3.5" /> 🎯 ドストライク選抜
             </button>
-            <button 
-              onClick={() => setViewMode({ type: 'trend', value: 'value' in viewMode ? viewMode.value : null })} 
-              className={`flex-1 py-3 text-sm md:text-base font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
+            <button
+              onClick={() => setViewMode({ type: 'trend', value: 'value' in viewMode ? viewMode.value : null })}
+              className={`flex-1 py-2 text-xs md:text-sm font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
                 ${viewMode.type === 'trend' ? 'bg-foreground text-background shadow-md scale-100' : 'text-foreground/50 hover:text-foreground hover:bg-secondary scale-95'}`}
             >
-              <TrendingUp className="w-4 h-4" /> 🔥 トレンド・発見
+              <TrendingUp className="w-3.5 h-3.5" /> 🔥 トレンド・発見
             </button>
-            <button 
-              onClick={() => setViewMode({ type: 'keep' })} 
-              className={`flex-1 py-3 text-sm md:text-base font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
+            <button
+              onClick={() => setViewMode({ type: 'keep' })}
+              className={`flex-1 py-2 text-xs md:text-sm font-extrabold rounded-full transition-all duration-300 flex items-center justify-center gap-2
                 ${viewMode.type === 'keep' ? 'bg-yellow-400 text-black shadow-md scale-100' : 'text-foreground/50 hover:text-foreground hover:bg-secondary scale-95'}`}
             >
-              <Heart className="w-4 h-4" /> 💛 保存リスト
+              <Heart className="w-3.5 h-3.5" /> 💛 保存リスト
             </button>
           </div>
 

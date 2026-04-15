@@ -196,7 +196,7 @@ export default function FaceTypeGuidePage() {
                 { step: "①", text: "ドストライクAIのダッシュボードを開く" },
                 { step: "②", text: "「好きなタイプ」スロットから上の30タイプの中で気になるものを1〜5個選択" },
                 { step: "③", text: "AIがFANZAのデータベースからマッチスコア順に作品をピックアップ" },
-                { step: "④", text: "「キープ」「ドストライク」でフィードバックするとAIの精度が向上" },
+                { step: "④", text: "「キープ」「いいね」でフィードバックするとAIの精度が向上" },
               ].map(({ step, text }) => (
                 <div key={step} className="flex items-start gap-3">
                   <div className="w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center font-extrabold text-xs flex-shrink-0 mt-0.5">{step}</div>

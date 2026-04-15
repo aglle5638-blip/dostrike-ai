@@ -46,7 +46,7 @@ const ARTICLES = [
 const STEPS = [
   { num: "01", title: "顔タイプを選ぶ", desc: "30パターンから好みのタイプを1〜5つ選択" },
   { num: "02", title: "AIがマッチング", desc: "FANZAの数万本からスコア順に6本を提案" },
-  { num: "03", title: "フィードバック", desc: "キープ・ストライクで好みをAIに学習させる" },
+  { num: "03", title: "フィードバック", desc: "キープ・いいねで好みをAIに学習させる" },
 ];
 
 export default function Home() {

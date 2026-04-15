@@ -66,7 +66,7 @@ export default function GuidePage() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-background border border-border p-4 rounded-2xl flex flex-col items-center text-center">
                 <div className="bg-primary/20 p-2 rounded-full mb-3"><Sparkles className="w-5 h-5 text-primary fill-current" /></div>
-                <h4 className="font-bold text-sm mb-1">ドストライク（👍）</h4>
+                <h4 className="font-bold text-sm mb-1">いいね（👍）</h4>
                 <p className="text-[11px] text-foreground/60">AIに「この傾向が超好み！」と強くアピールし、同等の作品を優先させます。</p>
               </div>
               <div className="bg-background border border-border p-4 rounded-2xl flex flex-col items-center text-center">

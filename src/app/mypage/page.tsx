@@ -103,7 +103,7 @@ export default function MyPage() {
             <div>
               <h2 className="text-xl font-bold mb-2">ログインしていません</h2>
               <p className="text-sm text-foreground/50">
-                ログインするとキープ・ストライクが保存され、<br />どのデバイスからでも確認できます。
+                ログインするとキープ・いいねが保存され、<br />どのデバイスからでも確認できます。
               </p>
             </div>
             <Link

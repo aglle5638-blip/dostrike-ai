@@ -25,7 +25,7 @@ const STEPS = [
     icon: "⚡",
     title: "AIがFANZA作品をスコアリング",
     desc: "タイプを登録すると、AIがFANZAのデータベースを参照し、選んだ顔タイプとのマッチ度（0〜100%）を計算。マッチスコアの高い順に6本の作品が表示されます。",
-    tip: "「ドストライク順」以外にも、売上ランキング順・新着順・レビュー評価順などソート変更も可能です。",
+    tip: "「いいね順」以外にも、売上ランキング順・新着順・レビュー評価順などソート変更も可能です。",
   },
   {
     icon: "💛",
@@ -44,7 +44,7 @@ const STEPS = [
 const FEEDBACK_ITEMS = [
   {
     icon: <ThumbsUp className="w-4 h-4" />,
-    label: "ドストライク（👍）",
+    label: "いいね（👍）",
     color: "bg-primary/10 text-primary border-primary/20",
     effect: "「この傾向が超好き」という強いシグナル。AIが同タイプを優先するようになります。",
   },
@@ -154,7 +154,7 @@ export default function HowToFindPage() {
                   <h3 className="font-extrabold text-sm">フィードバック学習</h3>
                 </div>
                 <p className="text-xs text-foreground/70 leading-relaxed">
-                  「ドストライク」「チェンジ」などのフィードバックを蓄積することで、あなた固有の好みのパターンをAIが学習。レコメンドが使うたびに最適化されます。
+                  「いいね」「チェンジ」などのフィードバックを蓄積することで、あなた固有の好みのパターンをAIが学習。レコメンドが使うたびに最適化されます。
                 </p>
               </div>
             </div>
