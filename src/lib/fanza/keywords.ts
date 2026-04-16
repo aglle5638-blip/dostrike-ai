@@ -84,11 +84,19 @@ export function aggregateKeywords(typeIds: string[]): string[] {
 }
 
 /**
- * FANZA API の keyword パラメータ文字列を構築する（最大 3 語）。
+ * FANZA API の keyword パラメータ文字列を構築する。
+ * FANZA はAND検索のため、3語以上は結果ゼロになりやすい。
+ * 各スロットのprimary[0]だけを使い、全体最大2語に制限する。
  */
 export function buildFanzaKeyword(typeIds: string[]): string {
-  const kws = aggregateKeywords(typeIds);
-  return kws.slice(0, 3).join(' ');
+  const primarySet = new Set<string>();
+  for (const id of typeIds) {
+    const kw = TYPE_KEYWORDS[id];
+    if (!kw) continue;
+    if (kw.primary[0]) primarySet.add(kw.primary[0]);
+  }
+  // 最大2語（3語以上のANDは件数が激減するため）
+  return [...primarySet].slice(0, 2).join(' ');
 }
 
 /**
