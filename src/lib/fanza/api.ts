@@ -18,7 +18,7 @@ import type {
   VideoResult,
   SortBy,
 } from './types';
-import { aggregateKeywords, buildFanzaKeyword, calcMatchScore } from './keywords';
+import { aggregateKeywords, buildFanzaKeyword, buildFanzaKeywordCandidates, calcMatchScore } from './keywords';
 import { generateMockVideos } from './mock-data';
 
 const FANZA_API_BASE = 'https://api.dmm.com/affiliate/v3/ItemList';
@@ -64,15 +64,21 @@ export async function fetchVideosByTypeIds(
   const affiliateId = process.env.FANZA_AFFILIATE_ID;
   const apiKey = process.env.FANZA_API_KEY;
 
-  // ── 本番: FANZA API ──────────────────────────────────────────────
+  // ── 本番: FANZA API（キーワードフォールバック付き）────────────────
   if (affiliateId && apiKey) {
     try {
-      const videos = await callFanzaApi(
-        { keyword: buildFanzaKeyword(typeIds), sort: SORT_MAP[sortBy] as FanzaSearchParams['sort'], hits: limit, offset },
-        affiliateId,
-        apiKey,
-        typeIds
-      );
+      const candidates = buildFanzaKeywordCandidates(typeIds);
+      let videos: VideoResult[] = [];
+      for (const keyword of candidates) {
+        videos = await callFanzaApi(
+          { keyword, sort: SORT_MAP[sortBy] as FanzaSearchParams['sort'], hits: limit, offset },
+          affiliateId,
+          apiKey,
+          typeIds
+        );
+        if (videos.length >= 5) break; // 十分な件数が取れたら終了
+        console.log(`[fanza/api] keyword "${keyword}" returned ${videos.length} results, trying next candidate...`);
+      }
       return { videos, source: 'fanza', usedKeywords: keywords };
     } catch (err) {
       console.error('[fanza/api] Real API failed, falling back to mock:', err);

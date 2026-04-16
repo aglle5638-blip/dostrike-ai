@@ -732,10 +732,10 @@ export default function DashboardPage() {
                  </div>
                  <div className="flex-1">
                     <h3 className="font-extrabold flex items-center text-foreground mb-0.5 text-xs md:text-sm">
-                      📅 本日のおすすめ：厳選6本
+                      📅 本日のおすすめ
                     </h3>
                     <p className="text-foreground/70 text-[10px] md:text-xs leading-tight font-medium">
-                      AIがあなたの好みを学習し、数万本のデータベースから<strong className="text-primary font-bold">本日最もマッチした究極の6本に絞り込んで</strong>お届けします。
+                      AIがあなたの好みを学習し、数万本のデータベースから<strong className="text-primary font-bold">本日最もマッチした作品を厳選して</strong>お届けします。
                     </p>
                  </div>
               </div>
