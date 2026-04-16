@@ -592,10 +592,7 @@ export default function DashboardPage() {
                 >
                   <div
                     className="w-full aspect-square rounded-lg overflow-hidden relative"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPreviewFace(type);
-                    }}
+                    onClick={() => setPreviewFace(type)}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
@@ -619,47 +616,6 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      {/* ライトボックス */}
-      {previewFace && (
-        <div
-          className="fixed inset-0 z-[400] flex items-center justify-center bg-black/80 backdrop-blur-sm"
-          onClick={() => setPreviewFace(null)}
-        >
-          <div
-            className="relative max-w-sm w-[80vw] animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`/faces/${previewFace.id}.jpg`}
-              alt={previewFace.name}
-              className="w-full rounded-3xl shadow-2xl object-cover"
-            />
-            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent rounded-b-3xl p-5">
-              <p className="text-white font-extrabold text-lg">{previewFace.name}</p>
-              <div className="flex gap-1 mt-1 flex-wrap">
-                {previewFace.tags.map(tag => (
-                  <span key={tag} className="text-white/70 text-xs font-bold">{tag}</span>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => { handleTypeSelect(previewFace); setPreviewFace(null); }}
-                  className="flex-1 py-2.5 bg-primary text-white rounded-full font-extrabold text-sm hover:bg-primary/90 transition-colors shadow-lg"
-                >
-                  このタイプを選ぶ ✓
-                </button>
-                <button
-                  onClick={() => setPreviewFace(null)}
-                  className="px-4 py-2.5 bg-white/20 text-white rounded-full font-bold text-sm hover:bg-white/30 transition-colors"
-                >
-                  戻る
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 
@@ -668,92 +624,108 @@ export default function DashboardPage() {
    * モード1：パーソナルAI推し
    */
   const renderPersonalMode = () => {
-    const hasAnyType = typeSlots.some(s => s !== null);
-    const slotKey = typeSlots.filter(Boolean).map(s => s!.id).join(',');
+    const activeType = typeSlots[activeSlotIndex] ?? null;
+    const filledSlots = typeSlots.filter(Boolean).length;
 
     return (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
         {/* タイプ選択エリア */}
-        <div className="flex flex-col bg-card border border-border p-3 md:p-4 rounded-2xl gap-2 shadow-md relative overflow-hidden mb-5">
+        <div className="flex flex-col bg-card border border-border p-3 md:p-4 rounded-2xl gap-3 shadow-md relative overflow-hidden mb-5">
           <div className="absolute top-0 right-0 p-24 bg-primary/5 blur-[100px] rounded-full -z-10" />
           <div className="z-10 flex items-baseline gap-2 flex-wrap">
             <h2 className="text-sm md:text-base font-extrabold tracking-tight whitespace-nowrap">あなたの好きなタイプ</h2>
-            <p className="text-foreground/50 text-[10px] font-bold whitespace-nowrap">タップして追加・変更 / 最大5つ</p>
+            <p className="text-foreground/50 text-[10px] font-bold whitespace-nowrap">30パターン・最大5つ登録</p>
           </div>
 
-          {/* 5 Slots — クリックで直接カタログを開く直感UI */}
-          <div className="z-10 flex gap-2 md:gap-3 items-stretch overflow-x-auto no-scrollbar pb-1 px-0.5">
-            {isSlotsLoading
-              ? [0,1,2,3,4].map(i => (
-                  <div key={i} className="flex-shrink-0 flex flex-col items-center gap-1">
-                    <div className="w-[60px] h-[60px] md:w-[68px] md:h-[68px] rounded-2xl animate-pulse bg-secondary/70" />
-                    <div className="w-10 h-2 rounded-full bg-secondary/50 animate-pulse" />
-                  </div>
-                ))
-              : typeSlots.map((slot, i) => (
-                <div key={i} className="snap-start relative flex-shrink-0 group flex flex-col items-center gap-1">
-                  {/* スロット本体 — タップで直接カタログへ */}
+          {/* 5 Slots */}
+          <div className="z-10 flex gap-3 items-end overflow-x-auto no-scrollbar pt-3 pb-2 px-1">
+            {isSlotsLoading ? (
+              [0,1,2,3,4].map(i => (
+                <div key={i} className={`flex-shrink-0 rounded-2xl animate-pulse bg-secondary/70 ${i === 0 ? 'w-[72px] h-[72px] md:w-[84px] md:h-[84px]' : 'w-12 h-12 md:w-14 md:h-14'}`} />
+              ))
+            ) : null}
+            {!isSlotsLoading && typeSlots.map((slot, i) => {
+              const isActive = i === activeSlotIndex && slot !== null;
+              const sizeClass = slot
+                ? isActive
+                  ? 'w-[72px] h-[72px] md:w-[84px] md:h-[84px]'
+                  : 'w-12 h-12 md:w-14 md:h-14'
+                : 'w-12 h-12 md:w-14 md:h-14';
+              return (
+                <div key={i} className="snap-start relative flex-shrink-0 mt-1 mr-1 group">
                   <div
-                    onClick={() => handleOpenCatalog(i)}
-                    className={`relative w-[60px] h-[60px] md:w-[68px] md:h-[68px] rounded-2xl cursor-pointer transition-all duration-200 border-2 overflow-hidden ${
+                    onClick={() => slot ? setActiveSlotIndex(i) : handleOpenCatalog(i)}
+                    className={`relative rounded-2xl cursor-pointer transition-all duration-300 border-2 overflow-hidden ${sizeClass} ${
                       slot
-                        ? 'border-primary/50 hover:border-primary hover:shadow-[0_0_14px_rgba(244,63,94,0.35)]'
-                        : 'border-dashed border-border/60 bg-secondary/40 hover:border-primary/60 hover:bg-primary/5'
+                        ? isActive
+                          ? 'border-primary shadow-[0_0_16px_rgba(244,63,94,0.45)]'
+                          : 'border-primary/30 opacity-75 hover:opacity-100 hover:border-primary/60'
+                        : 'border-dashed border-border/50 bg-secondary/50 hover:border-primary/50 hover:bg-primary/5'
                     }`}
                   >
                     {slot ? (
                       <>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={`/faces/${slot.id}.jpg`}
-                          alt={slot.name}
-                          className="w-full h-full object-cover"
-                        />
-                        {/* ホバー時：「変更」オーバーレイ（デスクトップ） */}
-                        <div className="absolute inset-0 bg-black/55 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
-                          <span className="text-white text-[10px] font-extrabold tracking-wide">変更</span>
-                        </div>
+                        <img src={`/faces/${slot.id}.jpg`} alt={slot.name} className="w-full h-full object-cover" />
+                        {isActive && (
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
+                            <div className="bg-primary rounded-full p-0.5 shadow-sm">
+                              <Sparkles className="w-2.5 h-2.5 text-white" />
+                            </div>
+                          </div>
+                        )}
                       </>
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center gap-0.5">
-                        <Plus className="w-5 h-5 text-foreground/30 group-hover:text-primary transition-colors" />
-                        <span className="text-[8px] font-bold text-foreground/30 group-hover:text-primary transition-colors">追加</span>
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Plus className="w-4 h-4 text-foreground/30 group-hover:text-primary transition-colors" />
                       </div>
                     )}
                   </div>
-
-                  {/* スロット下ラベル */}
-                  <p className={`text-[8px] font-bold text-center leading-tight w-[60px] md:w-[68px] truncate transition-colors ${slot ? 'text-foreground/70' : 'text-foreground/25'}`}>
-                    {slot ? slot.name.replace(/^.+・/, '') : '—'}
-                  </p>
-
-                  {/* ×削除ボタン（スロット右上） */}
                   {slot && (
                     <button
                       onClick={(e) => handleClearSlot(e, i)}
-                      className="absolute -top-1.5 -right-1.5 w-4.5 h-4.5 w-[18px] h-[18px] flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-red-500 hover:text-white transition-colors z-20 opacity-0 group-hover:opacity-100"
+                      className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-red-500 hover:text-white transition-colors z-20 md:opacity-0 group-hover:opacity-100"
                     >
-                      <X className="w-2.5 h-2.5" />
+                      <X className="w-3 h-3" />
                     </button>
                   )}
                 </div>
-              ))
-            }
+              );
+            })}
           </div>
+
+          {/* アクティブタイプ情報（変更ボタンなし・クリックしてカタログを開く） */}
+          {activeType && (
+            <div
+              onClick={() => handleOpenCatalog(activeSlotIndex)}
+              className="z-10 flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-border/50 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
+            >
+              <span className="text-lg">{activeType.emoji}</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-extrabold text-foreground truncate">{activeType.name}</p>
+                <div className="flex gap-1 mt-0.5 flex-wrap">
+                  {activeType.keywords.slice(0, 4).map(k => (
+                    <span key={k} className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">#{k}</span>
+                  ))}
+                </div>
+              </div>
+              <span className="text-[9px] text-foreground/30 flex-shrink-0">タップで変更 →</span>
+            </div>
+          )}
         </div>
 
         <div className="relative z-10 transition-opacity duration-1000 min-h-[500px]">
-          {!hasAnyType ? (
+          {!activeType ? (
             <div className="text-center p-12 bg-card border border-border rounded-3xl mt-4 shadow-sm">
                <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
                <h3 className="text-lg font-bold text-foreground/80 mb-2">好きなタイプを登録してください</h3>
-               <p className="text-foreground/60 text-sm">上のスロットをタップして好みのタイプを選ぶと、AIがマッチした動画を表示します。</p>
+               <p className="text-foreground/60 text-sm">上のエリアから好みのタイプを選ぶと、AIがマッチした動画を表示します。</p>
                <button onClick={() => handleOpenCatalog(0)} className="mt-5 px-5 py-2.5 bg-primary text-white rounded-full font-bold text-sm hover:bg-primary/90 transition-colors">
                  タイプを選ぶ →
                </button>
             </div>
           ) : (
-            <div className="transition-opacity duration-500 opacity-100" key={slotKey}>
+            <div className="transition-opacity duration-500 opacity-100" key={activeSlotIndex}>
 
               <div className="bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm mb-5 flex flex-row items-center gap-3">
                  <div className="bg-primary p-2 md:p-3 rounded-lg shadow-[0_0_15px_rgba(244,63,94,0.3)] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
@@ -1655,6 +1627,48 @@ export default function DashboardPage() {
 
       {/* カタログモーダル */}
       {showCatalogModal && renderCatalogModal()}
+
+      {/* ライトボックス（モーダル外に配置してモーダルが閉じても表示できる） */}
+      {previewFace && (
+        <div
+          className="fixed inset-0 z-[500] flex items-center justify-center bg-black/80 backdrop-blur-sm"
+          onClick={() => setPreviewFace(null)}
+        >
+          <div
+            className="relative max-w-sm w-[80vw] animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`/faces/${previewFace.id}.jpg`}
+              alt={previewFace.name}
+              className="w-full rounded-3xl shadow-2xl object-cover"
+            />
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent rounded-b-3xl p-5">
+              <p className="text-white font-extrabold text-lg">{previewFace.name}</p>
+              <div className="flex gap-1 mt-1 flex-wrap">
+                {previewFace.tags.map(tag => (
+                  <span key={tag} className="text-white/70 text-xs font-bold">{tag}</span>
+                ))}
+              </div>
+              <div className="flex gap-2 mt-3">
+                <button
+                  onClick={() => { handleTypeSelect(previewFace); setPreviewFace(null); }}
+                  className="flex-1 py-2.5 bg-primary text-white rounded-full font-extrabold text-sm hover:bg-primary/90 transition-colors shadow-lg"
+                >
+                  このタイプを選ぶ ✓
+                </button>
+                <button
+                  onClick={() => setPreviewFace(null)}
+                  className="px-4 py-2.5 bg-white/20 text-white rounded-full font-bold text-sm hover:bg-white/30 transition-colors"
+                >
+                  戻る
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
