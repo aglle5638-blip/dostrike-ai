@@ -72,6 +72,7 @@ export async function POST(req: NextRequest) {
 
       if (cached?.videos) {
         const videos = cached.videos as VideoResult[];
+        console.log('[recommend] cache HIT. key:', cacheKey, 'count:', videos.length);
         return NextResponse.json({
           videos,
           source: 'cache',
@@ -81,11 +82,13 @@ export async function POST(req: NextRequest) {
     }
 
     // ── FANZA API / モック ────────────────────────────────────────
+    console.log('[recommend] cache MISS – calling API. typeIds:', slotTypeIds, 'cacheKey:', cacheKey);
     const result = await fetchVideosByTypeIds(slotTypeIds, {
       sortBy: validSortBy,
       limit: limit ?? 12,
       offset: offset ?? 0,
     });
+    console.log('[recommend] source:', result.source, 'keywords:', result.usedKeywords, 'count:', result.videos.length);
 
     // ── Supabase にキャッシュ書き込み ─────────────────────────────
     if (supabase && result.videos.length > 0) {
