@@ -694,11 +694,10 @@ export default function DashboardPage() {
             })}
           </div>
 
-          {/* アクティブタイプ情報（変更ボタンなし・クリックしてカタログを開く） */}
+          {/* アクティブタイプ情報 */}
           {activeType && (
             <div
-              onClick={() => handleOpenCatalog(activeSlotIndex)}
-              className="z-10 flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-border/50 cursor-pointer hover:border-primary/40 hover:bg-primary/5 transition-colors"
+              className="z-10 flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-border/50"
             >
               <span className="text-lg">{activeType.emoji}</span>
               <div className="flex-1 min-w-0">
@@ -709,7 +708,6 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
-              <span className="text-[9px] text-foreground/30 flex-shrink-0">タップで変更 →</span>
             </div>
           )}
         </div>
