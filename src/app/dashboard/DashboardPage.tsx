@@ -204,7 +204,7 @@ export default function DashboardPage() {
     fetch('/api/videos/recommend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 20 }),
+      body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 6 }),
     })
       .then(r => r.json())
       .then((data: RecommendResponse) => {
