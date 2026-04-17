@@ -23,10 +23,10 @@ import {
 } from '@/lib/fanza/face-matching';
 import type { FaceFeatures } from '@/app/api/analyze-face/route';
 
-const MAX_ACTRESSES  = 50;    // 1回のバッチで処理する女優数（タイムアウト対策）
+const MAX_ACTRESSES  = 10;    // 1回のバッチで処理する女優数（Vercelタイムアウト対策）
 const BATCH_SIZE     = 100;   // FANZA API 1回あたりの取得数
 const TOP_MATCHES    = 20;    // 顔タイプごとに保存する上位マッチ数
-const GEMINI_DELAY   = 150;   // Gemini API レート制限対策 (ms)
+const GEMINI_DELAY   = 100;   // Gemini API レート制限対策 (ms)
 
 const FANZA_API_BASE = 'https://api.dmm.com/affiliate/v3/ActressSearch';
 
