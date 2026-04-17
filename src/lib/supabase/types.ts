@@ -108,6 +108,56 @@ export interface Database {
           expires_at?: string;
         };
       };
+
+      // ── 女優プロフィール（週次バッチ）──────────────────────────────
+      actress_profiles: {
+        Row: {
+          id:            string;
+          name:          string;
+          image_url:     string | null;
+          face_features: Json | null;
+          analyzed_at:   string | null;
+          created_at:    string;
+          updated_at:    string;
+        };
+        Insert: {
+          id:            string;
+          name:          string;
+          image_url?:    string | null;
+          face_features?: Json | null;
+          analyzed_at?:  string | null;
+          updated_at?:   string;
+        };
+        Update: {
+          name?:         string;
+          image_url?:    string | null;
+          face_features?: Json | null;
+          analyzed_at?:  string | null;
+          updated_at?:   string;
+        };
+      };
+
+      // ── 顔タイプ × 女優マッチング（週次バッチ）─────────────────────
+      actress_face_matches: {
+        Row: {
+          face_type_id:  string;
+          actress_id:    string;
+          actress_name:  string;
+          match_score:   number;
+          created_at:    string;
+        };
+        Insert: {
+          face_type_id:  string;
+          actress_id:    string;
+          actress_name:  string;
+          match_score:   number;
+          created_at?:   string;
+        };
+        Update: {
+          actress_name?: string;
+          match_score?:  number;
+        };
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
@@ -116,7 +166,9 @@ export interface Database {
 }
 
 // ── 便利型エイリアス ─────────────────────────────────────────────
-export type UserProfile = Database['public']['Tables']['user_profiles']['Row'];
-export type UserSlot    = Database['public']['Tables']['user_slots']['Row'];
-export type UserFeedback = Database['public']['Tables']['user_feedback']['Row'];
-export type VideoCache  = Database['public']['Tables']['video_cache']['Row'];
+export type UserProfile       = Database['public']['Tables']['user_profiles']['Row'];
+export type UserSlot          = Database['public']['Tables']['user_slots']['Row'];
+export type UserFeedback      = Database['public']['Tables']['user_feedback']['Row'];
+export type VideoCache        = Database['public']['Tables']['video_cache']['Row'];
+export type ActressProfile    = Database['public']['Tables']['actress_profiles']['Row'];
+export type ActressFaceMatch  = Database['public']['Tables']['actress_face_matches']['Row'];

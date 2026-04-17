@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/daily-batch",
       "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/weekly-actress-batch",
+      "schedule": "0 15 * * 0"
     }
   ]
 }

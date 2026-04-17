@@ -180,6 +180,60 @@ export async function validateLink(url: string): Promise<boolean> {
   }
 }
 
+// ─── 女優ID指定で動画を取得 ───────────────────────────────────────
+/**
+ * FANZA ItemList を article=actress で絞り込んで動画を取得する。
+ * actress_face_matches テーブルで得た女優IDを渡す。
+ */
+export async function fetchVideosByActressIds(
+  actressIds: string[],
+  options: { limit?: number; sortBy?: SortBy } = {}
+): Promise<VideoResult[]> {
+  const { limit = 20, sortBy = 'rank' } = options;
+  const affiliateId = process.env.FANZA_AFFILIATE_ID;
+  const apiKey      = process.env.FANZA_API_KEY;
+  if (!affiliateId || !apiKey) return [];
+
+  const allVideos: VideoResult[] = [];
+  const seen = new Set<string>();
+  const perActress = Math.ceil(limit / actressIds.length);
+
+  for (const actressId of actressIds) {
+    try {
+      const query = new URLSearchParams({
+        site:         'FANZA',
+        service:      'digital',
+        floor:        'videoa',
+        hits:         String(Math.min(perActress + 2, 20)),
+        offset:       '1',
+        sort:         SORT_MAP[sortBy] ?? 'rank',
+        article:      'actress',
+        article_id:   actressId,
+        affiliate_id: affiliateId,
+        api_id:       apiKey,
+        output:       'json',
+      });
+
+      const res  = await fetch(`${FANZA_API_BASE}?${query}`, { next: { revalidate: 3600 } });
+      if (!res.ok) continue;
+
+      const data = (await res.json()) as FanzaApiResponse;
+      if (data.result.status !== 200) continue;
+
+      for (const item of data.result.items ?? []) {
+        if (!seen.has(item.content_id)) {
+          seen.add(item.content_id);
+          allVideos.push(mapFanzaItemToVideo(item, allVideos.length, affiliateId, []));
+        }
+      }
+    } catch (err) {
+      console.error(`[fanza/api] fetchVideosByActressIds error for actress ${actressId}:`, err);
+    }
+  }
+
+  return allVideos.slice(0, limit);
+}
+
 // ─── レガシー互換 ─────────────────────────────────────────────────
 /** @deprecated match-videos route との互換用。新規コードは fetchVideosByTypeIds を使うこと。 */
 export interface FanzaItem {

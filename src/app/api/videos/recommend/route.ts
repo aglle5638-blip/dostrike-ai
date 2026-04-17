@@ -16,7 +16,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { fetchVideosByTypeIds } from '@/lib/fanza/api';
+import { fetchVideosByTypeIds, fetchVideosByActressIds } from '@/lib/fanza/api';
 import { aggregateKeywords } from '@/lib/fanza/keywords';
 import { createServiceClient } from '@/lib/supabase/server';
 import type { SortBy, RecommendRequest, RecommendResponse, VideoResult } from '@/lib/fanza/types';
@@ -58,9 +58,68 @@ export async function POST(req: NextRequest) {
 
     const validSortBy = (sortBy as SortBy) ?? 'match';
 
-    // ── Supabase キャッシュ確認 ───────────────────────────────────
-    const cacheKey = buildCacheKey(slotTypeIds, validSortBy, limit ?? 12, offset ?? 0);
-    const supabase = createServiceClient();
+    const supabase   = createServiceClient();
+    const resolvedLimit  = limit  ?? 20;
+    const resolvedOffset = offset ?? 0;
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ルート① 女優顔マッチング（週次バッチ済みデータがある場合）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (supabase) {
+      const { data: matches } = await supabase
+        .from('actress_face_matches')
+        .select('actress_id, actress_name, match_score')
+        .in('face_type_id', slotTypeIds)
+        .order('match_score', { ascending: false })
+        .limit(6); // 上位6人の女優
+
+      if (matches && matches.length > 0) {
+        // 同じ女優が複数タイプにマッチする場合は重複除去（スコア合算）
+        const actressMap = new Map<string, { name: string; score: number }>();
+        for (const m of matches) {
+          const existing = actressMap.get(m.actress_id);
+          actressMap.set(m.actress_id, {
+            name:  m.actress_name,
+            score: (existing?.score ?? 0) + m.match_score,
+          });
+        }
+        const topActressIds = [...actressMap.entries()]
+          .sort((a, b) => b[1].score - a[1].score)
+          .slice(0, 5)
+          .map(([id]) => id);
+
+        const videos = await fetchVideosByActressIds(topActressIds, {
+          limit:  resolvedLimit,
+          sortBy: validSortBy,
+        });
+
+        if (videos.length > 0) {
+          console.log('[recommend] actress-match route. actresses:', topActressIds, 'videos:', videos.length);
+          // video_cache にも保存（1時間TTL）
+          if (supabase) {
+            const cacheKey  = buildCacheKey(slotTypeIds, validSortBy, resolvedLimit, resolvedOffset);
+            const expiresAt = new Date(Date.now() + CACHE_TTL_SEC * 1000).toISOString();
+            await supabase.from('video_cache').upsert({
+              cache_key:     cacheKey,
+              videos:        videos as unknown as import('@/lib/supabase/types').Json,
+              face_type_ids: slotTypeIds,
+              sort_by:       validSortBy,
+              expires_at:    expiresAt,
+            });
+          }
+          return NextResponse.json({
+            videos,
+            source:       'fanza',
+            usedKeywords: topActressIds,
+          } satisfies RecommendResponse);
+        }
+      }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ルート② Supabase キャッシュ確認（フォールバック）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const cacheKey = buildCacheKey(slotTypeIds, validSortBy, resolvedLimit, resolvedOffset);
 
     if (supabase) {
       const { data: cached } = await supabase
@@ -81,16 +140,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // ── FANZA API / モック ────────────────────────────────────────
-    console.log('[recommend] cache MISS – calling API. typeIds:', slotTypeIds, 'cacheKey:', cacheKey);
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // ルート③ キーワード検索（actress_face_matches 未投入時のフォールバック）
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    console.log('[recommend] keyword fallback. typeIds:', slotTypeIds);
     const result = await fetchVideosByTypeIds(slotTypeIds, {
       sortBy: validSortBy,
-      limit: limit ?? 12,
-      offset: offset ?? 0,
+      limit:  resolvedLimit,
+      offset: resolvedOffset,
     });
     console.log('[recommend] source:', result.source, 'keywords:', result.usedKeywords, 'count:', result.videos.length);
 
-    // ── Supabase にキャッシュ書き込み ─────────────────────────────
     if (supabase && result.videos.length > 0) {
       const expiresAt = new Date(Date.now() + CACHE_TTL_SEC * 1000).toISOString();
       await supabase.from('video_cache').upsert({
@@ -102,13 +162,11 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const response: RecommendResponse = {
+    return NextResponse.json({
       videos:       result.videos,
       source:       result.source,
       usedKeywords: result.usedKeywords,
-    };
-
-    return NextResponse.json(response);
+    } satisfies RecommendResponse);
   } catch (err) {
     console.error('[/api/videos/recommend] Error:', err);
     return NextResponse.json(
