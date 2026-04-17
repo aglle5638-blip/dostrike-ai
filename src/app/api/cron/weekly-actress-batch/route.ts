@@ -23,10 +23,10 @@ import {
 } from '@/lib/fanza/face-matching';
 import type { FaceFeatures } from '@/app/api/analyze-face/route';
 
-const MAX_ACTRESSES  = 500;   // 取得する女優数上限
+const MAX_ACTRESSES  = 50;    // 1回のバッチで処理する女優数（タイムアウト対策）
 const BATCH_SIZE     = 100;   // FANZA API 1回あたりの取得数
 const TOP_MATCHES    = 20;    // 顔タイプごとに保存する上位マッチ数
-const GEMINI_DELAY   = 400;   // Gemini API レート制限対策 (ms)
+const GEMINI_DELAY   = 150;   // Gemini API レート制限対策 (ms)
 
 const FANZA_API_BASE = 'https://api.dmm.com/affiliate/v3/ActressSearch';
 
@@ -46,6 +46,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
+
+  // ── ページング（?offset=N で分割実行可能） ───────────────────
+  const url        = new URL(request.url);
+  const pageOffset = parseInt(url.searchParams.get('offset') ?? '0', 10);
 
   const affiliateId = process.env.FANZA_AFFILIATE_ID;
   const apiKey      = process.env.FANZA_API_KEY;
@@ -72,7 +76,10 @@ export async function GET(request: NextRequest) {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   const actresses: FanzaActress[] = [];
 
-  for (let offset = 1; offset <= MAX_ACTRESSES; offset += BATCH_SIZE) {
+  // pageOffset を使って FANZA APIのoffsetを決定（1-origin）
+  const fanzaStartOffset = pageOffset + 1;
+
+  for (let offset = fanzaStartOffset; actresses.length < MAX_ACTRESSES; offset += BATCH_SIZE) {
     try {
       const params = new URLSearchParams({
         site:         'FANZA',
@@ -179,11 +186,14 @@ export async function GET(request: NextRequest) {
   }
 
   const elapsed = Date.now() - startTime;
+  const nextOffset = pageOffset + MAX_ACTRESSES;
   console.log(`[weekly-actress-batch] Done in ${elapsed}ms. Report:`, report);
 
   return NextResponse.json({
     success: true,
     elapsedMs: elapsed,
     report,
+    nextOffset,  // 次回実行時に ?offset=nextOffset を指定
+    nextCommand: `curl -H "Authorization: Bearer [CRON_SECRET]" https://dostrike-ai.vercel.app/api/cron/weekly-actress-batch?offset=${nextOffset}`,
   });
 }
