@@ -239,6 +239,20 @@ export default function DashboardPage() {
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
 
+  // 広告スロット用：FANZAランキング上位動画のサムネイルを使用（グリッド2枠＋右パネル5枠）
+  const [adVideos, setAdVideos] = useState<VideoResult[]>([]);
+  useEffect(() => {
+    fetch('/api/videos/recommend', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ slotTypeIds: ['A1', 'B1', 'C1', 'D1', 'E1'], sortBy: 'rank', limit: 7, skipActressMatch: true }),
+    })
+      .then(r => r.json())
+      .then((data: RecommendResponse) => { if (data.videos?.length) setAdVideos(data.videos.slice(0, 7)); })
+      .catch(() => {/* 失敗時は表示なし */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // /api/videos/recommend フェッチ（アクティブスロットの顔タイプ変更 or ソート変更時）
   useEffect(() => {
     // アクティブスロットの顔タイプIDのみ送信（スロットごとに独立した女優マッチ結果を表示）
@@ -993,30 +1007,58 @@ export default function DashboardPage() {
                       </div>
                     );
                   })}
-                  {/* 広告スロット×2（7枠目・8枠目） */}
-                  {[0, 1].map((adIdx) => (
+                  {/* 広告スロット×2（7枠目・8枠目）：FANZAランキング動画サムネイルを使用 */}
+                  {adVideos.slice(0, 2).map((adVideo, adIdx) => (
                     <a
-                      key={`ad-slot-${adIdx}`}
-                      href={adIdx === 0
-                        ? 'https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dranking%2F&af_id=dostrikeai-990&ch=banner'
-                        : 'https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dreview%2F&af_id=dostrikeai-990&ch=banner'}
+                      key={`ad-${adVideo.id}-${adIdx}`}
+                      href={adVideo.affiliateUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="block group"
+                      className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none group"
                     >
-                      <div className="relative bg-gradient-to-br from-pink-950/40 via-card to-primary/10 border border-primary/20 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/50 transition-all duration-300 h-full min-h-[160px] flex flex-col items-center justify-center gap-3 p-4 text-center">
-                        <div className="absolute top-2 left-2 bg-primary/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">PR</div>
-                        <div className="text-2xl">🎬</div>
-                        <div className="flex flex-col gap-1">
-                          <p className="text-xs font-extrabold text-foreground/90 leading-tight">
-                            {adIdx === 0 ? 'FANZA 人気ランキング' : 'FANZA 高評価作品'}
-                          </p>
-                          <p className="text-[10px] text-foreground/50 leading-tight">
-                            {adIdx === 0 ? '今話題の人気作品をチェック' : 'レビュー高評価の名作揃い'}
-                          </p>
+                      <div className="relative bg-card border border-primary/25 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/60 transition-all duration-300">
+                        <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                          {/* PRバッジ */}
+                          <div className="absolute top-2 left-2 flex gap-1.5">
+                            <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-extrabold text-[10px] tracking-wide shadow-lg">PR</div>
+                          </div>
+                          {/* ホバーオーバーレイ */}
+                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                            <span className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-5 rounded-full text-[10px] font-extrabold shadow-lg">
+                              FANZAで見る →
+                            </span>
+                          </div>
                         </div>
-                        <span className="text-[10px] font-bold text-primary border border-primary/30 rounded-full px-3 py-1 group-hover:bg-primary group-hover:text-white transition-colors">
-                          今すぐ見る →
+                        {/* スマホ用ボタン（常時表示） */}
+                        <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                          <span className="flex flex-1 items-center justify-center gap-1 bg-primary text-white py-1.5 rounded-lg text-[10px] font-bold">
+                            FANZAで見る →
+                          </span>
+                        </div>
+                        <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                          <div className="h-[2.8rem] overflow-hidden">
+                            <p className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">
+                              {adVideo.title}
+                            </p>
+                          </div>
+                          <div className="flex items-center justify-between gap-1 min-w-0">
+                            {adVideo.actress && (
+                              <div className="text-[10px] text-foreground/50 truncate flex-1">{adVideo.actress}</div>
+                            )}
+                            {adVideo.reviewAverage != null && (
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                <span className="text-[10px] font-bold text-foreground/70">{adVideo.reviewAverage.toFixed(1)}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex">
+                        <span className="flex flex-1 items-center justify-center gap-1.5 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] bg-primary/10 text-primary border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                          FANZAで今すぐ見る →
                         </span>
                       </div>
                     </a>
@@ -1286,7 +1328,7 @@ export default function DashboardPage() {
         {!isTrendLoading && (
           <div className="flex items-center justify-center gap-3 mt-6 pb-8">
             <button
-              onClick={() => setTrendPage(p => Math.max(0, p - 1))}
+              onClick={() => { setTrendPage(p => Math.max(0, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               disabled={trendPage === 0}
               className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
             >
@@ -1296,7 +1338,7 @@ export default function DashboardPage() {
               {Array.from({ length: TREND_MAX_PAGES }, (_, i) => (
                 <button
                   key={i}
-                  onClick={() => setTrendPage(i)}
+                  onClick={() => { setTrendPage(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
                   className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${trendPage === i ? 'bg-primary text-white' : 'bg-secondary text-foreground/60 hover:bg-border'}`}
                 >
                   {i + 1}
@@ -1304,7 +1346,7 @@ export default function DashboardPage() {
               ))}
             </div>
             <button
-              onClick={() => setTrendPage(p => Math.min(TREND_MAX_PAGES - 1, p + 1))}
+              onClick={() => { setTrendPage(p => Math.min(TREND_MAX_PAGES - 1, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
               disabled={trendPage === TREND_MAX_PAGES - 1 || trendVideos.length < TREND_PAGE_SIZE}
               className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
             >
@@ -1706,29 +1748,58 @@ export default function DashboardPage() {
         <div className="hidden xl:block xl:col-span-2">
           <div className="sticky top-24 max-h-[calc(100vh-6rem)] overflow-y-auto no-scrollbar space-y-6 pb-20">
 
-            <div className="text-[10px] text-foreground/40 uppercase tracking-widest font-bold pt-2 mb-3">Sponsored</div>
-            
-            {[...AFFILIATE_ADS].map((ad, index) => {
-               const adImgId = AD_IMAGES[ad.imgIndex % AD_IMAGES.length];
-               const isWide = index % 2 === 0;
+            <div className="text-[10px] text-foreground/40 uppercase tracking-widest font-bold pt-2 mb-3">Sponsored / PR</div>
 
+            {/* FANZAランキング動画を広告として表示 */}
+            {adVideos.slice(2, 7).map((adVideo, index) => {
+               const isWide = index % 2 === 0;
                return (
                  <a
-                   key={index}
+                   key={`side-ad-${adVideo.id}`}
+                   href={adVideo.affiliateUrl}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className={`block rounded-2xl overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-xl transition-all duration-300 border border-border/40 hover:border-primary/50 ${isWide ? 'aspect-[5/3]' : 'aspect-[3/4]'}`}
+                 >
+                   {/* eslint-disable-next-line @next/next/no-img-element */}
+                   <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                   <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/20 to-transparent" />
+                   <div className="absolute top-2 left-2">
+                     <span className="bg-yellow-400 text-black px-2 py-0.5 rounded text-[9px] font-extrabold">PR</span>
+                   </div>
+                   <div className="absolute bottom-0 left-0 right-0 p-3 text-white z-10">
+                     <div className="font-bold text-[11px] line-clamp-2 leading-snug mb-1.5">{adVideo.title}</div>
+                     {adVideo.actress && (
+                       <div className="text-[10px] text-white/70 truncate mb-1.5">{adVideo.actress}</div>
+                     )}
+                     <div className="flex items-center justify-between">
+                       {adVideo.reviewAverage != null && (
+                         <div className="flex items-center gap-0.5">
+                           <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                           <span className="text-[10px] font-bold text-yellow-300">{adVideo.reviewAverage.toFixed(1)}</span>
+                         </div>
+                       )}
+                       <span className="text-[9px] text-white/80 font-bold ml-auto bg-white/15 px-2 py-0.5 rounded-full group-hover:bg-primary transition-colors">
+                         FANZAで見る →
+                       </span>
+                     </div>
+                   </div>
+                 </a>
+               );
+            })}
+
+            {/* adVideos未ロード時のスケルトン */}
+            {adVideos.length < 3 && AFFILIATE_ADS.slice(0, 5).map((ad, index) => {
+               const isWide = index % 2 === 0;
+               return (
+                 <a
+                   key={`fallback-ad-${index}`}
                    href={ad.url}
                    target="_blank"
                    rel="noopener noreferrer"
-                   className={`block bg-card rounded-3xl flex items-center justify-center border border-border/50 overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-xl hover:border-primary/40 transition-all duration-300 ${isWide ? 'aspect-[5/3]' : 'aspect-square'}`}
-                 >
-                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                   <img src={`https://images.unsplash.com/photo-${adImgId}?w=400&h=400&fit=crop&q=80`} alt={`Ad ${index}`} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" />
-                   <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
-                   <div className="absolute bottom-5 left-5 right-5 text-white z-10">
-                      <span className={`${ad.color} px-2 py-0.5 rounded shadow-sm text-[10px] font-extrabold mb-2.5 inline-block`}>{ad.label}</span>
-                      <div className="font-bold text-sm line-clamp-2 leading-snug">{ad.title}</div>
-                   </div>
-                 </a>
-               )
+                   className={`block bg-secondary/30 rounded-2xl overflow-hidden border border-border/40 animate-pulse ${isWide ? 'aspect-[5/3]' : 'aspect-[3/4]'}`}
+                 />
+               );
             })}
           </div>
         </div>
