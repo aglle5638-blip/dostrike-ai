@@ -56,6 +56,36 @@ export async function POST(req: NextRequest) {
         .delete()
         .eq('user_id', user.id)
         .eq('video_id', videoId);
+
+      // 解除時はスコアを減らす
+      if (videoMeta?.actress && videoMeta.actress !== '不明') {
+        try {
+          const { searchActressByName } = await import('@/lib/fanza/api');
+          const { createServiceClient } = await import('@/lib/supabase/server');
+          const actressId = await searchActressByName(videoMeta.actress);
+          if (actressId) {
+            const sc = createServiceClient();
+            if (sc) {
+              const { data: existing } = await sc
+                .from('user_actress_preferences')
+                .select('score')
+                .eq('user_id', user.id)
+                .eq('actress_id', actressId)
+                .single();
+              const newScore = Math.max(0, (existing?.score ?? 1) - 1);
+              if (newScore === 0) {
+                await sc.from('user_actress_preferences').delete()
+                  .eq('user_id', user.id).eq('actress_id', actressId);
+              } else {
+                await sc.from('user_actress_preferences').update({ score: newScore })
+                  .eq('user_id', user.id).eq('actress_id', actressId);
+              }
+            }
+          }
+        } catch (prefErr) {
+          console.error('[feedback] actress preference decrement failed:', prefErr);
+        }
+      }
     } else {
       await supabase.from('user_feedback').upsert({
         user_id:      user.id,
@@ -65,6 +95,38 @@ export async function POST(req: NextRequest) {
         video_meta:   videoMeta ?? null,
         updated_at:   new Date().toISOString(),
       }, { onConflict: 'user_id,video_id' });
+
+      // 女優好み学習
+      if (videoMeta?.actress && videoMeta.actress !== '不明') {
+        try {
+          const { searchActressByName } = await import('@/lib/fanza/api');
+          const { createServiceClient } = await import('@/lib/supabase/server');
+          const actressId = await searchActressByName(videoMeta.actress);
+          if (actressId) {
+            const sc = createServiceClient();
+            if (sc) {
+              // 既存スコアを取得してインクリメント
+              const { data: existing } = await sc
+                .from('user_actress_preferences')
+                .select('score')
+                .eq('user_id', user.id)
+                .eq('actress_id', actressId)
+                .single();
+              const newScore = (existing?.score ?? 0) + 1;
+              await sc.from('user_actress_preferences').upsert({
+                user_id:      user.id,
+                actress_id:   actressId,
+                actress_name: videoMeta.actress,
+                score:        newScore,
+                last_seen_at: new Date().toISOString(),
+              }, { onConflict: 'user_id,actress_id' });
+            }
+          }
+        } catch (prefErr) {
+          console.error('[feedback] actress preference update failed:', prefErr);
+          // 失敗してもフィードバック自体は成功として返す
+        }
+      }
     }
 
     return NextResponse.json({ success: true, videoId, action } satisfies FeedbackResponse);

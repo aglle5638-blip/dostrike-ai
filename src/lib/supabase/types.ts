@@ -137,6 +137,31 @@ export interface Database {
         };
       };
 
+      // ── ユーザー好み女優（フィードバック学習）──────────────────────
+      user_actress_preferences: {
+        Row: {
+          user_id:      string;
+          actress_id:   string;
+          actress_name: string;
+          score:        number;
+          last_seen_at: string;
+          created_at:   string;
+        };
+        Insert: {
+          user_id:      string;
+          actress_id:   string;
+          actress_name: string;
+          score?:       number;
+          last_seen_at?: string;
+          created_at?:  string;
+        };
+        Update: {
+          score?:        number;
+          actress_name?: string;
+          last_seen_at?: string;
+        };
+      };
+
       // ── 顔タイプ × 女優マッチング（週次バッチ）─────────────────────
       actress_face_matches: {
         Row: {
@@ -166,9 +191,10 @@ export interface Database {
 }
 
 // ── 便利型エイリアス ─────────────────────────────────────────────
-export type UserProfile       = Database['public']['Tables']['user_profiles']['Row'];
-export type UserSlot          = Database['public']['Tables']['user_slots']['Row'];
-export type UserFeedback      = Database['public']['Tables']['user_feedback']['Row'];
-export type VideoCache        = Database['public']['Tables']['video_cache']['Row'];
-export type ActressProfile    = Database['public']['Tables']['actress_profiles']['Row'];
-export type ActressFaceMatch  = Database['public']['Tables']['actress_face_matches']['Row'];
+export type UserProfile            = Database['public']['Tables']['user_profiles']['Row'];
+export type UserSlot               = Database['public']['Tables']['user_slots']['Row'];
+export type UserFeedback           = Database['public']['Tables']['user_feedback']['Row'];
+export type VideoCache             = Database['public']['Tables']['video_cache']['Row'];
+export type ActressProfile         = Database['public']['Tables']['actress_profiles']['Row'];
+export type ActressFaceMatch       = Database['public']['Tables']['actress_face_matches']['Row'];
+export type UserActressPreference  = Database['public']['Tables']['user_actress_preferences']['Row'];

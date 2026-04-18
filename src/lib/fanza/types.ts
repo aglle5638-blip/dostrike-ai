@@ -64,6 +64,12 @@ export interface FanzaApiItem {
   sampleImageURL?: {
     sample_s?: Record<string, string>;  // "1": url, "2": url …
   };
+  sampleMovieURL?: {
+    size_476_306?: string;
+    size_560_360?: string;
+    size_644_414?: string;
+    size_720_480?: string;
+  };
   prices: {
     price: string;         // "1,980" 単位: 円
     list_price?: string;
@@ -96,6 +102,7 @@ export interface VideoResult {
   actress: string;
   thumbnailUrl: string;
   sampleImageUrl?: string;
+  sampleMovieUrl?: string;
   durationMin?: number;     // 再生時間（分）
   price?: string;
   reviewCount?: number;
@@ -113,6 +120,8 @@ export interface RecommendRequest {
   sortBy?: SortBy;
   limit?: number;
   offset?: number;
+  keyword?: string;
+  skipActressMatch?: boolean; // true = トレンドモード：女優ルートをスキップしキーワード検索へ直行
 }
 
 export type SortBy = 'match' | 'rank' | 'date' | 'review' | 'price_asc' | 'price_desc';

@@ -56,9 +56,10 @@ export async function fetchVideosByTypeIds(
     sortBy?: SortBy;
     limit?: number;
     offset?: number;
+    keyword?: string;
   } = {}
 ): Promise<{ videos: VideoResult[]; source: 'fanza' | 'mock'; usedKeywords: string[]; totalCount?: number }> {
-  const { sortBy = 'match', limit = 12, offset = 0 } = options;
+  const { sortBy = 'match', limit = 12, offset = 0, keyword: keywordOverride } = options;
   const keywords = aggregateKeywords(typeIds);
 
   const affiliateId = process.env.FANZA_AFFILIATE_ID;
@@ -67,6 +68,16 @@ export async function fetchVideosByTypeIds(
   // ── 本番: FANZA API（キーワードフォールバック付き）────────────────
   if (affiliateId && apiKey) {
     try {
+      // キーワード直接指定の場合はそのまま使用
+      if (keywordOverride) {
+        const videos = await callFanzaApi(
+          { keyword: keywordOverride, sort: SORT_MAP[sortBy] as FanzaSearchParams['sort'], hits: limit, offset },
+          affiliateId,
+          apiKey,
+          typeIds
+        );
+        return { videos, source: 'fanza', usedKeywords: [keywordOverride] };
+      }
       const candidates = buildFanzaKeywordCandidates(typeIds);
       let videos: VideoResult[] = [];
       for (const keyword of candidates) {
@@ -154,6 +165,7 @@ function mapFanzaItemToVideo(
     actress,
     thumbnailUrl: item.imageURL?.large ?? item.imageURL?.small ?? '',
     sampleImageUrl: item.sampleImageURL?.sample_s?.['1'],
+    sampleMovieUrl: item.sampleMovieURL?.size_720_480 ?? item.sampleMovieURL?.size_644_414 ?? item.sampleMovieURL?.size_560_360 ?? item.sampleMovieURL?.size_476_306,
     durationMin: duration,
     price: item.prices?.price,
     reviewCount: item.review?.count,
@@ -232,6 +244,40 @@ export async function fetchVideosByActressIds(
   }
 
   return allVideos.slice(0, limit);
+}
+
+// ─── 女優名検索 ───────────────────────────────────────────────
+/**
+ * 女優名でFANZA ActressSearch APIを呼び出しIDを取得する
+ * フィードバック学習でいいねした女優のIDを特定するために使用
+ */
+export async function searchActressByName(name: string): Promise<string | null> {
+  const affiliateId = process.env.FANZA_AFFILIATE_ID;
+  const apiKey = process.env.FANZA_API_KEY;
+  if (!affiliateId || !apiKey) return null;
+  try {
+    const params = new URLSearchParams({
+      site: 'FANZA',
+      keyword: name,
+      hits: '3',
+      offset: '1',
+      affiliate_id: affiliateId,
+      api_id: apiKey,
+      output: 'json',
+    });
+    const res = await fetch(`https://api.dmm.com/affiliate/v3/ActressSearch?${params}`, {
+      next: { revalidate: 86400 }, // 24h cache
+    });
+    if (!res.ok) return null;
+    const data = await res.json() as { result: { status: string | number; actress?: Array<{ id: string; name: string }> } };
+    if (String(data.result.status) !== '200') return null;
+    const actresses = data.result.actress ?? [];
+    // 名前が完全一致するものを優先
+    const exact = actresses.find(a => a.name === name);
+    return exact?.id ?? actresses[0]?.id ?? null;
+  } catch {
+    return null;
+  }
 }
 
 // ─── レガシー互換 ─────────────────────────────────────────────────

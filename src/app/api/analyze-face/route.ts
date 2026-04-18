@@ -40,7 +40,7 @@ const FACE_ANALYSIS_PROMPT = `
   "skinTone": "色白・色黒・健康的・透明感がある など",
   "impression": ["清楚系", "かわいい系", "お姉さん系", "ギャル系" などから最大3つ],
   "ageRange": "10代後半・20代前半・20代後半・30代前半・30代後半 など",
-  "features": ["童顔", "美人系", "スポーティ" などの特徴を最大5つ]
+  "features": ["巨乳・スレンダー・グラマー・童顔・アイドル系・美少女・ハーフ・外国人・モデル系・素人系・熟女・人妻・ぽっちゃり・褐色・清楚・美脚・和風・上品・メガネ・ギャル・スポーティ などFANZA検索で使われる特徴を最大5つ"]
 }
 
 注意:
@@ -136,21 +136,10 @@ function buildSearchKeywords(features: FaceFeatures): string[] {
     keywords.push(...features.impression);
   }
 
-  // 肌・目
-  if (features.skinTone && features.skinTone.includes("白")) {
-    keywords.push("色白");
-  }
-  if (features.eyeType && features.eyeType.includes("大き")) {
-    keywords.push("大きい目");
-  }
-
-  // 特徴
+  // 特徴（FANZAジャンルに対応するキーワード）
   if (Array.isArray(features.features)) {
     keywords.push(...features.features.slice(0, 3));
   }
-
-  // 年齢層
-  if (features.ageRange) keywords.push(features.ageRange);
 
   // 重複除去
   return [...new Set(keywords)].filter(Boolean).slice(0, 8);

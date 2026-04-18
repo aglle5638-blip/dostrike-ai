@@ -69,11 +69,46 @@ const AD_IMAGES = [
 ];
 
 const AFFILIATE_ADS = [
-  { platform: "FANZA", title: "FANZA限定: 最新AIマッチングセール 最大70%OFF！", label: "AD / PR", color: "bg-yellow-400 text-black", imgIndex: 0 },
-  { platform: "FC2動画", title: "FC2 個人撮影・素人 売れ筋トップ50をチェック", label: "AD / FC2", color: "bg-pink-500 text-white", imgIndex: 1 },
-  { platform: "MGS動画", title: "MGS 新規無料登録で500ptプレゼントキャンペーン", label: "AD / MGS", color: "bg-blue-600 text-white", imgIndex: 2 },
-  { platform: "DLsite", title: "DLsite 同人・音声作品 週末限定80%オフ大セール", label: "AD / DLsite", color: "bg-green-500 text-white", imgIndex: 3 },
-  { platform: "FANZA", title: "FANZAアワード2026 最新受賞作品を一挙大公開！", label: "AD / PR", color: "bg-yellow-400 text-black", imgIndex: 4 },
+  {
+    platform: "FANZA",
+    title: "FANZA 売上ランキング TOP100を見る",
+    label: "AD / PR",
+    color: "bg-yellow-400 text-black",
+    imgIndex: 0,
+    url: "https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dranking%2F&af_id=dostrikeai-990&ch=side_ranking",
+  },
+  {
+    platform: "FANZA",
+    title: "FANZA 新着・本日発売の注目作品",
+    label: "AD / PR",
+    color: "bg-pink-500 text-white",
+    imgIndex: 1,
+    url: "https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Ddate%2F&af_id=dostrikeai-990&ch=side_new",
+  },
+  {
+    platform: "FANZA",
+    title: "FANZA 高評価レビュー作品まとめ",
+    label: "AD / PR",
+    color: "bg-yellow-400 text-black",
+    imgIndex: 2,
+    url: "https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dreview%2F&af_id=dostrikeai-990&ch=side_review",
+  },
+  {
+    platform: "FANZA",
+    title: "FANZA月額見放題プランをチェック！",
+    label: "AD / PR",
+    color: "bg-blue-600 text-white",
+    imgIndex: 3,
+    url: "https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dranking%2F&af_id=dostrikeai-990&ch=side_monthly",
+  },
+  {
+    platform: "FANZA",
+    title: "FANZAアワード2026 受賞作品を見る",
+    label: "AD / PR",
+    color: "bg-yellow-400 text-black",
+    imgIndex: 4,
+    url: "https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dranking%2F&af_id=dostrikeai-990&ch=side_award",
+  },
 ];
 
 const MOCK_TITLES = [
@@ -128,7 +163,19 @@ const TRENDS = [
   { rank: 10, name: "ギャル", color: "text-foreground/60 bg-secondary" }
 ];
 
-const TAG_LIST = ['#お姉さん系', '#素人風', '#ギャル', '#JD風', '#色白', '#巨乳', '#美脚', '#童顔', '#メガネ', '#制服'];
+const TAG_LIST = [
+  { label: '#お姉さん系', keyword: 'お姉さん系' },
+  { label: '#素人風', keyword: '素人' },
+  { label: '#ギャル', keyword: 'ギャル' },
+  { label: '#JD風', keyword: '女子大生' },
+  { label: '#色白', keyword: '色白' },
+  { label: '#巨乳', keyword: '巨乳' },
+  { label: '#美脚', keyword: '美脚' },
+  { label: '#童顔', keyword: '童顔' },
+  { label: '#メガネ', keyword: 'メガネ' },
+  { label: '#制服', keyword: '制服' },
+  { label: '#ぽっちゃり', keyword: 'ぽっちゃり' },
+];
 
 // トレンドモード時は value が null の場合「総合トレンド」を表示
 type ViewMode = { type: 'personal' } | { type: 'trend', value: string | null } | { type: 'keep' };
@@ -183,6 +230,7 @@ export default function DashboardPage() {
   const [videoStats, setVideoStats] = useState<Record<string, VideoStat>>({});
   const [trendVideos, setTrendVideos] = useState<VideoResult[]>([]);
   const [isTrendLoading, setIsTrendLoading] = useState(false);
+  const [trendPage, setTrendPage] = useState(0); // 0始まり、20件/ページ、最大5ページ
   const [sortBy, setSortBy] = useState<SortBy>("match");
   const [isSortOpen, setIsSortOpen] = useState(false);
 
@@ -191,10 +239,11 @@ export default function DashboardPage() {
   const [isLoadingVideos, setIsLoadingVideos] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
 
-  // /api/videos/recommend フェッチ（スロット変更 or ソート変更時）
+  // /api/videos/recommend フェッチ（アクティブスロットの顔タイプ変更 or ソート変更時）
   useEffect(() => {
-    const filledTypeIds = typeSlots.filter(Boolean).map(s => s!.id);
-    if (filledTypeIds.length === 0) {
+    // アクティブスロットの顔タイプIDのみ送信（スロットごとに独立した女優マッチ結果を表示）
+    const activeType = typeSlots[activeSlotIndex];
+    if (!activeType) {
       setVideos([]);
       return;
     }
@@ -204,7 +253,7 @@ export default function DashboardPage() {
     fetch('/api/videos/recommend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 6 }),
+      body: JSON.stringify({ slotTypeIds: [activeType.id], sortBy, limit: 6 }),
     })
       .then(r => r.json())
       .then((data: RecommendResponse) => {
@@ -220,8 +269,9 @@ export default function DashboardPage() {
         }
       });
     return () => { cancelled = true; };
-  }, [typeSlots, sortBy]);
+  }, [typeSlots, activeSlotIndex, sortBy]);
   const [keepFilter, setKeepFilter] = useState<'all'|'keep'|'strike'>('all');
+  const [sampleVideoUrl, setSampleVideoUrl] = useState<string | null>(null);
 
   // Undo Toast State
   type UndoToast = { seed: string; prevAction: string; message: string; timerId: ReturnType<typeof setTimeout> } | null;
@@ -365,19 +415,48 @@ export default function DashboardPage() {
   }, [videos]);
 
   // ── トレンド/タグ変更時にFANZA APIから動画を取得 ─────────────────
+  const TREND_PAGE_SIZE = 20;
+  const TREND_MAX_PAGES = 5; // 最大100件
+
+  // viewMode変更時はページをリセット
+  useEffect(() => {
+    if (viewMode.type === 'trend') setTrendPage(0);
+  }, [viewMode]);
+
   useEffect(() => {
     if (viewMode.type !== 'trend') return;
     const trendKey = viewMode.value;
-    const typeIds = trendKey
-      ? (TREND_TO_TYPE_IDS[trendKey] ?? TREND_FALLBACK_IDS)
-      : TREND_FALLBACK_IDS;
+    const offset = trendPage * TREND_PAGE_SIZE;
     let cancelled = false;
     setIsTrendLoading(true);
     setTrendVideos([]);
+
+    // キーワード直接検索
+    if (trendKey?.startsWith('__keyword__')) {
+      const keyword = trendKey.replace('__keyword__', '');
+      fetch('/api/videos/recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slotTypeIds: [], sortBy, limit: TREND_PAGE_SIZE, offset, keyword, skipActressMatch: true }),
+      })
+        .then(r => r.json())
+        .then((data: RecommendResponse) => {
+          if (!cancelled) {
+            setTrendVideos(data.videos ?? []);
+            setIsTrendLoading(false);
+          }
+        })
+        .catch(() => { if (!cancelled) setIsTrendLoading(false); });
+      return () => { cancelled = true; };
+    }
+
+    const typeIds = trendKey
+      ? (TREND_TO_TYPE_IDS[trendKey] ?? TREND_FALLBACK_IDS)
+      : TREND_FALLBACK_IDS;
     fetch('/api/videos/recommend', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ slotTypeIds: typeIds, sortBy, limit: 20 }),
+      body: JSON.stringify({ slotTypeIds: typeIds, sortBy, limit: TREND_PAGE_SIZE, offset, skipActressMatch: true }),
     })
       .then(r => r.json())
       .then((data: RecommendResponse) => {
@@ -386,11 +465,9 @@ export default function DashboardPage() {
           setIsTrendLoading(false);
         }
       })
-      .catch(() => {
-        if (!cancelled) setIsTrendLoading(false);
-      });
+      .catch(() => { if (!cancelled) setIsTrendLoading(false); });
     return () => { cancelled = true; };
-  }, [viewMode, sortBy]);
+  }, [viewMode, sortBy, trendPage]);
 
   // スロット変更時に自動保存
   const isFirstSlotLoad = useRef(true);
@@ -793,6 +870,7 @@ export default function DashboardPage() {
               {/* Video grid */}
               {!isLoadingVideos && !videoError && videos.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
+                  {/* FANZA広告スロット（6動画 + 2広告 = 4列×2行を埋める） */}
                   {videos.map((video) => {
                     const fb = feedback[video.id];
                     if (fb === 'change') {
@@ -821,18 +899,15 @@ export default function DashboardPage() {
                               {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                             </div>
                             {/* ホバーオーバーレイ：再生 ＋ レビュー */}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                              <a
-                                href={video.affiliateUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
                                 className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
-                                onClick={(e) => e.stopPropagation()}
                               >
                                 <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                              </a>
+                              </button>
                               <a
-                                href={video.affiliateUrl}
+                                href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
@@ -842,7 +917,26 @@ export default function DashboardPage() {
                               </a>
                             </div>
                           </div>
+                          {/* スマホ用アクションボタン（常時表示） */}
+                          <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                              className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                            >
+                              <Play className="w-3 h-3 fill-current" /> サンプル再生
+                            </button>
+                            <a
+                              href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <MessageSquare className="w-3 h-3" /> レビューを見る
+                            </a>
+                          </div>
                           <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                            <div className="h-[2.8rem] overflow-hidden">
                             <a
                               href={video.affiliateUrl}
                               target="_blank"
@@ -851,6 +945,7 @@ export default function DashboardPage() {
                             >
                               {video.title}
                             </a>
+                            </div>
                             {/* 女優名 ＋ ⭐レビュー評価 */}
                             <div className="flex items-center justify-between gap-1 min-w-0">
                               {video.actress && (
@@ -898,6 +993,34 @@ export default function DashboardPage() {
                       </div>
                     );
                   })}
+                  {/* 広告スロット×2（7枠目・8枠目） */}
+                  {[0, 1].map((adIdx) => (
+                    <a
+                      key={`ad-slot-${adIdx}`}
+                      href={adIdx === 0
+                        ? 'https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dranking%2F&af_id=dostrikeai-990&ch=banner'
+                        : 'https://al.dmm.co.jp/?lurl=https%3A%2F%2Fwww.dmm.co.jp%2Fdigital%2Fvideoa%2F-%2Flist%2F%3D%2Fsort%3Dreview%2F&af_id=dostrikeai-990&ch=banner'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block group"
+                    >
+                      <div className="relative bg-gradient-to-br from-pink-950/40 via-card to-primary/10 border border-primary/20 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/50 transition-all duration-300 h-full min-h-[160px] flex flex-col items-center justify-center gap-3 p-4 text-center">
+                        <div className="absolute top-2 left-2 bg-primary/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-md">PR</div>
+                        <div className="text-2xl">🎬</div>
+                        <div className="flex flex-col gap-1">
+                          <p className="text-xs font-extrabold text-foreground/90 leading-tight">
+                            {adIdx === 0 ? 'FANZA 人気ランキング' : 'FANZA 高評価作品'}
+                          </p>
+                          <p className="text-[10px] text-foreground/50 leading-tight">
+                            {adIdx === 0 ? '今話題の人気作品をチェック' : 'レビュー高評価の名作揃い'}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold text-primary border border-primary/30 rounded-full px-3 py-1 group-hover:bg-primary group-hover:text-white transition-colors">
+                          今すぐ見る →
+                        </span>
+                      </div>
+                    </a>
+                  ))}
                 </div>
               )}
             </div>
@@ -932,7 +1055,7 @@ export default function DashboardPage() {
           onClick={() => setViewMode({ type: 'trend', value: null })}
           className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${viewMode.type === 'trend' && !('value' in viewMode && viewMode.value) ? 'bg-primary text-white border-primary' : 'bg-card border-border text-foreground/70 hover:border-primary/50'}`}
         >
-          🔥 総合トレンド
+          🔥 人気ランキング
         </button>
         {TRENDS.map((t) => (
           <button
@@ -948,11 +1071,11 @@ export default function DashboardPage() {
       <div className="flex gap-1.5 overflow-x-auto no-scrollbar pb-1.5">
         {TAG_LIST.map((tag) => (
           <button
-            key={tag}
-            onClick={() => setViewMode({ type: 'trend', value: tag })}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${viewMode.type === 'trend' && 'value' in viewMode && viewMode.value === tag ? 'bg-primary text-white border-primary' : 'bg-card border-border text-foreground/70 hover:border-primary/50'}`}
+            key={tag.label}
+            onClick={() => setViewMode({ type: 'trend', value: '__keyword__' + tag.keyword })}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-bold border transition-all ${viewMode.type === 'trend' && 'value' in viewMode && viewMode.value === '__keyword__' + tag.keyword ? 'bg-primary text-white border-primary' : 'bg-card border-border text-foreground/70 hover:border-primary/50'}`}
           >
-            {tag}
+            {tag.label}
           </button>
         ))}
       </div>
@@ -994,7 +1117,8 @@ export default function DashboardPage() {
    * モード2：トレンド・発見（20件の高密度カード）
    */
   const renderTrendMode = (trendValue: string | null) => {
-    const title = trendValue ? `${trendValue} の人気動画` : "総合トレンドランキング";
+    const displayKey = trendValue?.startsWith('__keyword__') ? trendValue.replace('__keyword__', '') : trendValue;
+    const title = displayKey ? `${displayKey} の人気動画` : "人気ランキング";
     
     return (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[500px]">
@@ -1002,7 +1126,7 @@ export default function DashboardPage() {
         
         {/* 検索バー */}
         <div className="relative mb-5 max-w-2xl">
-           <input type="text" placeholder="好みのキーワードで検索する" className="w-full bg-card border border-border rounded-full py-3.5 pl-11 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-sm shadow-black/5" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
+           <input type="text" placeholder="好みのキーワードで検索する" className="w-full bg-card border border-border rounded-full py-3.5 pl-11 pr-10 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all shadow-sm shadow-black/5" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && searchQuery.trim()) { setViewMode({ type: 'trend', value: '__keyword__' + searchQuery.trim() }); } }} />
            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-foreground/40" />
            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-foreground/40 hover:text-foreground"><X className="w-4 h-4"/></button>}
         </div>
@@ -1056,18 +1180,15 @@ export default function DashboardPage() {
                       </div>
 
                       {/* ホバーオーバーレイ */}
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                        <a
-                          href={v.affiliateUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(v.sampleMovieUrl ?? null); if (!v.sampleMovieUrl) window.open(v.affiliateUrl, '_blank'); }}
                           className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
-                          onClick={(e) => e.stopPropagation()}
                         >
                           <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                        </a>
+                        </button>
                         <a
-                          href={v.affiliateUrl}
+                          href={`https://video.dmm.co.jp/av/content/?id=${v.id}#review`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
@@ -1078,7 +1199,27 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
+                    {/* スマホ用アクションボタン（常時表示） */}
+                    <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(v.sampleMovieUrl ?? null); if (!v.sampleMovieUrl) window.open(v.affiliateUrl, '_blank'); }}
+                        className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                      >
+                        <Play className="w-3 h-3 fill-current" /> サンプル再生
+                      </button>
+                      <a
+                        href={`https://video.dmm.co.jp/av/content/?id=${v.id}#review`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MessageSquare className="w-3 h-3" /> レビューを見る
+                      </a>
+                    </div>
+
                     <div className="p-2.5 md:p-3 bg-secondary/10 border-t border-border/50 flex flex-col gap-1">
+                      <div className="h-[2.8rem] overflow-hidden">
                       <a
                         href={v.affiliateUrl}
                         target="_blank"
@@ -1087,6 +1228,7 @@ export default function DashboardPage() {
                       >
                         {v.title}
                       </a>
+                      </div>
                       <div className="flex items-center justify-between gap-1 min-w-0">
                         {v.actress && (
                           <div className="text-[10px] text-foreground/50 truncate flex-1">{v.actress}</div>
@@ -1137,6 +1279,37 @@ export default function DashboardPage() {
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {/* ページネーション */}
+        {!isTrendLoading && (
+          <div className="flex items-center justify-center gap-3 mt-6 pb-8">
+            <button
+              onClick={() => setTrendPage(p => Math.max(0, p - 1))}
+              disabled={trendPage === 0}
+              className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
+            >
+              ← 前へ
+            </button>
+            <div className="flex gap-1.5">
+              {Array.from({ length: TREND_MAX_PAGES }, (_, i) => (
+                <button
+                  key={i}
+                  onClick={() => setTrendPage(i)}
+                  className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${trendPage === i ? 'bg-primary text-white' : 'bg-secondary text-foreground/60 hover:bg-border'}`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setTrendPage(p => Math.min(TREND_MAX_PAGES - 1, p + 1))}
+              disabled={trendPage === TREND_MAX_PAGES - 1 || trendVideos.length < TREND_PAGE_SIZE}
+              className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
+            >
+              次へ →
+            </button>
           </div>
         )}
       </div>
@@ -1457,7 +1630,7 @@ export default function DashboardPage() {
                   onClick={() => handleTrendClick(null)}
                   className={`w-full flex items-center gap-3 p-3 rounded-xl font-bold text-xs transition-colors border ${viewMode.type === 'trend' && !viewMode.value ? 'bg-primary text-white border-primary shadow-md' : 'border-transparent text-foreground hover:bg-secondary'}`}
                 >
-                  <TrendingUp className="w-4 h-4" /> 総合トレンド
+                  <TrendingUp className="w-4 h-4" /> 人気ランキング
                 </button>
                 <div className="my-2 border-t border-border w-1/2 mx-auto" />
                 {TRENDS.map((t) => (
@@ -1480,8 +1653,8 @@ export default function DashboardPage() {
               </h3>
               <div className="flex flex-wrap gap-2">
                 {TAG_LIST.map((tag, i) => (
-                  <span key={i} onClick={() => handleTrendClick(tag)} className={`cursor-pointer px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors border ${viewMode.type === 'trend' && viewMode.value === tag ? 'bg-foreground text-background border-foreground' : 'bg-secondary text-foreground/80 hover:bg-border border-border/40'}`}>
-                    {tag}
+                  <span key={i} onClick={() => setViewMode({ type: 'trend', value: '__keyword__' + tag.keyword })} className={`cursor-pointer px-3 py-1.5 rounded-full text-[11px] font-bold transition-colors border ${viewMode.type === 'trend' && viewMode.value === '__keyword__' + tag.keyword ? 'bg-foreground text-background border-foreground' : 'bg-secondary text-foreground/80 hover:bg-border border-border/40'}`}>
+                    {tag.label}
                   </span>
                 ))}
               </div>
@@ -1540,7 +1713,13 @@ export default function DashboardPage() {
                const isWide = index % 2 === 0;
 
                return (
-                 <div key={index} className={`bg-card rounded-3xl flex items-center justify-center border border-border/50 overflow-hidden relative group cursor-pointer shadow-sm ${isWide ? 'aspect-[5/3]' : 'aspect-square'}`}>
+                 <a
+                   key={index}
+                   href={ad.url}
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   className={`block bg-card rounded-3xl flex items-center justify-center border border-border/50 overflow-hidden relative group cursor-pointer shadow-sm hover:shadow-xl hover:border-primary/40 transition-all duration-300 ${isWide ? 'aspect-[5/3]' : 'aspect-square'}`}
+                 >
                    {/* eslint-disable-next-line @next/next/no-img-element */}
                    <img src={`https://images.unsplash.com/photo-${adImgId}?w=400&h=400&fit=crop&q=80`} alt={`Ad ${index}`} className="absolute inset-0 w-full h-full object-cover opacity-80 group-hover:scale-105 transition-transform duration-700" />
                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/10 to-transparent" />
@@ -1548,7 +1727,7 @@ export default function DashboardPage() {
                       <span className={`${ad.color} px-2 py-0.5 rounded shadow-sm text-[10px] font-extrabold mb-2.5 inline-block`}>{ad.label}</span>
                       <div className="font-bold text-sm line-clamp-2 leading-snug">{ad.title}</div>
                    </div>
-                 </div>
+                 </a>
                )
             })}
           </div>
@@ -1587,12 +1766,15 @@ export default function DashboardPage() {
                 ユーザー様向けに特別に厳選されたキャンペーン広告です。今すぐチェック！
               </p>
               
-              <button 
-                onClick={() => setShowInterstitialAd(false)} 
+              <a
+                href={AFFILIATE_ADS[interstitialAdIndex].url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowInterstitialAd(false)}
                 className={`w-full mt-2 py-3.5 ${AFFILIATE_ADS[interstitialAdIndex].color} hover:opacity-90 rounded-xl font-extrabold flex items-center justify-center shadow-md transition-all text-sm`}
               >
-                キャンペーンを見る
-              </button>
+                FANZAで今すぐ見る →
+              </a>
             </div>
             
           </div>
@@ -1625,6 +1807,33 @@ export default function DashboardPage() {
 
       {/* カタログモーダル */}
       {showCatalogModal && renderCatalogModal()}
+
+      {/* サンプル動画プレーヤー（DMMのlitevideoプレーヤーをiframe埋め込み） */}
+      {sampleVideoUrl && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/90 backdrop-blur-sm"
+          onClick={() => setSampleVideoUrl(null)}
+        >
+          <div className="relative w-full max-w-3xl mx-2" onClick={(e) => e.stopPropagation()}>
+            <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
+              <iframe
+                src={sampleVideoUrl}
+                className="absolute inset-0 w-full h-full rounded-2xl border-0"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+                title="サンプル動画"
+              />
+            </div>
+            <button
+              onClick={() => setSampleVideoUrl(null)}
+              className="absolute -top-4 -right-4 w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold shadow-xl z-10"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <p className="text-center text-white/50 text-xs mt-2">背景をタップして閉じる</p>
+          </div>
+        </div>
+      )}
 
       {/* ライトボックス（モーダル外に配置してモーダルが閉じても表示できる） */}
       {previewFace && (

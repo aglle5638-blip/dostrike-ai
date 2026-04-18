@@ -149,32 +149,62 @@ export async function GET(request: NextRequest) {
   console.log(`[weekly-actress-batch] Analyzed ${analyzedActresses.length} actresses`);
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // STEP 3: 全 30 顔タイプ × 女優でスコアを計算して上位を保存
+  // STEP 3: 各女優のベストマッチ顔タイプに排他的に割り当て
+  //
+  // 旧方式: 「タイプごとにスコア上位N人」→ 黒髪女優が全タイプに出現して差別化不可
+  // 新方式: 「女優ごとに最高スコアのタイプ1つのみ」→ タイプ別に完全に異なる女優プール
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  for (const [typeId, typeProfile] of Object.entries(TYPE_FACE_PROFILES)) {
-    // スコア計算
-    const scored = analyzedActresses.map(a => ({
-      actress_id:   a.id,
-      actress_name: a.name,
-      match_score:  scoreFaceMatch(a.features, typeProfile),
+
+  // 女優ごとに全30タイプのスコアを計算し、ベストタイプを決定
+  const typeToActresses = new Map<string, Array<{ actress_id: string; actress_name: string; match_score: number }>>();
+  for (const typeId of Object.keys(TYPE_FACE_PROFILES)) {
+    typeToActresses.set(typeId, []);
+  }
+
+  for (const actress of analyzedActresses) {
+    // 全30タイプのスコアを計算
+    const allScores = Object.entries(TYPE_FACE_PROFILES).map(([typeId, profile]) => ({
+      typeId,
+      score: scoreFaceMatch(actress.features, profile),
     }));
 
-    // 上位 TOP_MATCHES 人を抽出（スコア0は除外）
-    const topMatches = scored
-      .filter(s => s.match_score > 0)
+    // スコア0以上のものだけ対象
+    const validScores = allScores.filter(s => s.score > 0);
+    if (validScores.length === 0) continue;
+
+    // 最高スコアを取得
+    const maxScore = Math.max(...validScores.map(s => s.score));
+
+    // 最高スコアと同点のタイプに割り当て（通常1つ、同点の場合は複数も可）
+    // 同点が多すぎる場合（4タイプ以上）は上位3タイプのみ
+    const bestTypes = validScores
+      .filter(s => s.score === maxScore)
+      .slice(0, 3);
+
+    for (const { typeId, score } of bestTypes) {
+      typeToActresses.get(typeId)?.push({
+        actress_id:   actress.id,
+        actress_name: actress.name,
+        match_score:  score,
+      });
+    }
+  }
+
+  // タイプごとに actress_face_matches へ upsert
+  for (const [typeId, actresses] of typeToActresses) {
+    if (actresses.length === 0) continue;
+
+    // TOP_MATCHES 件に絞ってスコア降順
+    const rows = actresses
       .sort((a, b) => b.match_score - a.match_score)
-      .slice(0, TOP_MATCHES);
-
-    if (topMatches.length === 0) continue;
-
-    // Supabase に upsert
-    const rows = topMatches.map(m => ({
-      face_type_id:  typeId,
-      actress_id:    m.actress_id,
-      actress_name:  m.actress_name,
-      match_score:   m.match_score,
-      created_at:    new Date().toISOString(),
-    }));
+      .slice(0, TOP_MATCHES)
+      .map(m => ({
+        face_type_id:  typeId,
+        actress_id:    m.actress_id,
+        actress_name:  m.actress_name,
+        match_score:   m.match_score,
+        created_at:    new Date().toISOString(),
+      }));
 
     const { error } = await supabase.from('actress_face_matches').upsert(rows);
     if (error) {

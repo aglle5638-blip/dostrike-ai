@@ -20,47 +20,47 @@ export interface TypeFaceProfile {
 }
 
 export const TYPE_FACE_PROFILES: Record<string, TypeFaceProfile> = {
-  // ─── GROUP A: 清楚系 ─────────────────────────────────────────────
-  A1: { impression:['清楚系'],    hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['スレンダー','清楚'] },
-  A2: { impression:['清楚系'],    hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['小顔','清楚'] },
-  A3: { impression:['清楚系'],    hairColor:'茶髪', hairLength:'ロング',   skinTone:'色白',   features:['上品','清楚'] },
-  A4: { impression:['清楚系'],    hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['巨乳','グラマー'] },
-  A5: { impression:['清楚系'],    hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['知的','メガネ'] },
+  // ─── GROUP A: 巨乳・グラマー系 ─────────────────────────────────
+  A1: { impression:['かわいい系','清楚系'], hairColor:'黒髪', hairLength:'ロング',    skinTone:'色白',   features:['巨乳','グラマー'] },
+  A2: { impression:['かわいい系'],          hairColor:'茶髪', hairLength:'ロング',    skinTone:'健康的', features:['巨乳','ギャル'] },
+  A3: { impression:['お姉さん系','セクシー系'], hairColor:'黒髪', hairLength:'ロング', skinTone:'色白',   features:['巨乳','グラマー'] },
+  A4: { impression:['お姉さん系'],          hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['巨乳','人妻'] },
+  A5: { impression:['セクシー系'],          hairColor:'黒髪', hairLength:'ロング',    skinTone:'日焼け', features:['巨乳','褐色'] },
 
-  // ─── GROUP B: キュート系 ─────────────────────────────────────────
-  B1: { impression:['かわいい系'], hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['童顔','小顔'] },
-  B2: { impression:['かわいい系'], hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['アイドル系','かわいい'] },
-  B3: { impression:['かわいい系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['天然','素朴'] },
-  B4: { impression:['かわいい系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['ぽっちゃり','癒し系'] },
-  B5: { impression:['かわいい系'], hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['アイドル系','小柄'] },
+  // ─── GROUP B: スレンダー・モデル系 ──────────────────────────────
+  B1: { impression:['クール系'],            hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['スレンダー','モデル系'] },
+  B2: { impression:['クール系'],            hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['スレンダー','美脚'] },
+  B3: { impression:['清楚系'],             hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['スレンダー','清楚'] },
+  B4: { impression:['クール系'],            hairColor:'茶髪', hairLength:'ロング',   skinTone:'色白',   features:['スレンダー','ハーフ'] },
+  B5: { impression:['クール系'],            hairColor:'金髪', hairLength:'ロング',   skinTone:'色白',   features:['スレンダー','外国人'] },
 
-  // ─── GROUP C: お姉さん系 ─────────────────────────────────────────
-  C1: { impression:['お姉さん系'], hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['セクシー','グラマー'] },
-  C2: { impression:['お姉さん系'], hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['熟女','上品'] },
-  C3: { impression:['お姉さん系'], hairColor:'茶髪', hairLength:'ロング',   skinTone:'健康的', features:['グラマー','セクシー'] },
-  C4: { impression:['お姉さん系'], hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['人妻','知的'] },
-  C5: { impression:['お姉さん系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['人妻','熟女'] },
+  // ─── GROUP C: 童顔・かわいい系 ──────────────────────────────────
+  C1: { impression:['かわいい系'],          hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['童顔','アイドル系'] },
+  C2: { impression:['かわいい系'],          hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['童顔','美少女'] },
+  C3: { impression:['かわいい系'],          hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['童顔','素人系'] },
+  C4: { impression:['かわいい系'],          hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['童顔','小柄'] },
+  C5: { impression:['かわいい系'],          hairColor:'茶髪', hairLength:'ロング',   skinTone:'健康的', features:['アイドル系','美少女'] },
 
-  // ─── GROUP D: ギャル系 ───────────────────────────────────────────
-  D1: { impression:['ギャル系'],   hairColor:'金髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','活発'] },
-  D2: { impression:['ギャル系'],   hairColor:'茶髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','グラマー'] },
-  D3: { impression:['ギャル系'],   hairColor:'黒髪', hairLength:'ロング',   skinTone:'日焼け', features:['個性的','ヤンキー系'] },
-  D4: { impression:['ギャル系'],   hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['個性的','サブカル'] },
-  D5: { impression:['ギャル系'],   hairColor:'金髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','巨乳'] },
+  // ─── GROUP D: 清楚・お嬢様系 ────────────────────────────────────
+  D1: { impression:['清楚系'],             hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['清楚','上品'] },
+  D2: { impression:['清楚系'],             hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['清楚','メガネ'] },
+  D3: { impression:['清楚系'],             hairColor:'茶髪', hairLength:'ロング',   skinTone:'色白',   features:['清楚','お嬢様'] },
+  D4: { impression:['清楚系'],             hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['清楚','和風'] },
+  D5: { impression:['清楚系','かわいい系'], hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['清楚','スレンダー'] },
 
-  // ─── GROUP E: クール系 ───────────────────────────────────────────
-  E1: { impression:['クール系'],   hairColor:'黒髪', hairLength:'ショート', skinTone:'色白',   features:['クール','スレンダー'] },
-  E2: { impression:['クール系'],   hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['モデル系','スレンダー'] },
-  E3: { impression:['クール系'],   hairColor:'金髪', hairLength:'ロング',   skinTone:'色白',   features:['外国人','ハーフ'] },
-  E4: { impression:['クール系'],   hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['クール','ミステリアス'] },
-  E5: { impression:['クール系'],   hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['モデル系','大人'] },
+  // ─── GROUP E: 熟女・人妻系 ──────────────────────────────────────
+  E1: { impression:['お姉さん系'],          hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['熟女','上品'] },
+  E2: { impression:['お姉さん系'],          hairColor:'黒髪', hairLength:'ミディアム',skinTone:'色白',   features:['人妻','知的'] },
+  E3: { impression:['お姉さん系'],          hairColor:'茶髪', hairLength:'ロング',   skinTone:'健康的', features:['人妻','グラマー'] },
+  E4: { impression:['お姉さん系'],          hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['熟女','ぽっちゃり'] },
+  E5: { impression:['お姉さん系'],          hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['熟女','スレンダー'] },
 
-  // ─── GROUP F: その他 ─────────────────────────────────────────────
-  F1: { impression:['かわいい系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['スポーティ','活発'] },
-  F2: { impression:['かわいい系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['素人系','素朴'] },
-  F3: { impression:['清楚系'],     hairColor:'黒髪', hairLength:'ロング',   skinTone:'色白',   features:['和風','着物'] },
-  F4: { impression:['セクシー系'], hairColor:'黒髪', hairLength:'ロング',   skinTone:'日焼け', features:['褐色','エキゾチック'] },
-  F5: { impression:['お姉さん系'], hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['ぽっちゃり','熟女'] },
+  // ─── GROUP F: ギャル・個性系 ────────────────────────────────────
+  F1: { impression:['ギャル系'],            hairColor:'金髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','グラマー'] },
+  F2: { impression:['ギャル系'],            hairColor:'茶髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','巨乳'] },
+  F3: { impression:['ギャル系'],            hairColor:'黒髪', hairLength:'ロング',   skinTone:'日焼け', features:['ギャル','スレンダー'] },
+  F4: { impression:['かわいい系'],          hairColor:'茶髪', hairLength:'ミディアム',skinTone:'健康的', features:['ぽっちゃり','素人系'] },
+  F5: { impression:['かわいい系'],          hairColor:'黒髪', hairLength:'ミディアム',skinTone:'健康的', features:['スポーティ','素人系'] },
 };
 
 // ── スコアリング関数 ──────────────────────────────────────────────
@@ -93,18 +93,18 @@ export function scoreFaceMatch(
 
 // ── Gemini による女優顔分析 ───────────────────────────────────────
 const FACE_ANALYSIS_PROMPT = `
-あなたは日本人女性の顔の特徴を分析するAIです。
+あなたはFANZA（成人向け動画サービス）の女優の顔の特徴を分析するAIです。
 アップロードされた顔写真を分析し、以下のJSON形式のみで回答してください（マークダウン不要）:
 
 {
-  "hairColor": "黒髪・茶髪・金髪・暗め・明るめ のいずれか",
-  "hairLength": "ショート・ボブ・ミディアム・ロング のいずれか",
-  "faceShape": "小顔・卵型・面長・丸顔 など",
+  "hairColor": "黒髪・茶髪・金髪 のいずれか",
+  "hairLength": "ショート・ミディアム・ロング のいずれか",
+  "faceShape": "小顔・卵型・丸顔・面長 など",
   "eyeType": "大きい目・パッチリ・切れ長・一重・二重 など",
-  "skinTone": "色白・健康的・日焼け のいずれか",
+  "skinTone": "色白・健康的・日焼け・褐色 のいずれか",
   "impression": ["清楚系・かわいい系・お姉さん系・ギャル系・クール系・セクシー系 から最大2つ"],
   "ageRange": "20代前半・20代後半・30代前半・30代後半 など",
-  "features": ["童顔・スレンダー・グラマー・巨乳・モデル系・アイドル系・人妻・熟女・ハーフ など最大4つ"]
+  "features": ["巨乳・スレンダー・グラマー・童顔・アイドル系・美少女・ハーフ・外国人・モデル系・素人系・熟女・人妻・ぽっちゃり・褐色・清楚・美脚・和風・上品・メガネ・ギャル・スポーティ から最大4つ"]
 }
 `;
 
