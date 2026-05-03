@@ -40,20 +40,23 @@ export async function GET() {
   // ── 本番: FANZA ActressSearch ─────────────────────────────────────
   if (affiliateId && apiKey) {
     try {
-      // 多様性を確保するためランダムオフセットで取得（ActressSearch は sort=popular 非対応）
-      const randomOffset = Math.floor(Math.random() * 5) * 20 + 1; // 1,21,41,61,81
+      // initial パラメータでランダムな行の女優を取得
+      // FANZA ActressSearch は keyword か initial のどちらかが必須
+      const INITIALS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら'];
+      const initial = INITIALS[Math.floor(Math.random() * INITIALS.length)];
 
       const params = new URLSearchParams({
         site:         'FANZA',
+        initial,
         hits:         '30',
-        offset:       String(randomOffset),
+        offset:       '1',
         affiliate_id: affiliateId,
         api_id:       apiKey,
         output:       'json',
       });
 
       const url = `https://api.dmm.com/affiliate/v3/ActressSearch?${params}`;
-      console.log('[swipe-deck] fetching:', url.replace(apiKey, '***').replace(affiliateId, '***'));
+      console.log('[swipe-deck] fetching initial=' + initial);
 
       const res = await fetch(url, { cache: 'no-store' });
 
