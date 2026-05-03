@@ -161,9 +161,9 @@ export default function MarketingDashboard() {
     setTriggering(true);
     setTriggerResult(null);
     try {
-      const res = await fetch('/api/cron/social-post', { method: 'POST' });
+      const res = await fetch('/api/admin/trigger-post', { method: 'POST' });
       const json = await res.json();
-      setTriggerResult(JSON.stringify(json.results, null, 2));
+      setTriggerResult(JSON.stringify(json.results ?? json, null, 2));
       await fetchPosts();
     } catch (err) {
       setTriggerResult(`エラー: ${String(err)}`);
