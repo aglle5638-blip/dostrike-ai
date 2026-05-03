@@ -13,7 +13,7 @@ import { NextResponse } from 'next/server';
 export interface SwipeDeckActress {
   id: string;
   name: string;
-  imageUrl: string;        // medium サイズ
+  imageUrl: string;        // large サイズ（なければ small）
   tags: string[];          // 雰囲気タグ（bust/bodyHeight/スリーサイズから生成）
   videoCount?: number;
 }
@@ -74,7 +74,7 @@ export async function GET() {
             id: string;
             name: string;
             ruby?: string;
-            imageURL?: { small?: string; medium?: string; large?: string };
+            imageURL?: { small?: string; large?: string };
             bust?: string;
             waist?: string;
             hip?: string;
@@ -92,12 +92,9 @@ export async function GET() {
       }
 
       const rawActresses = data.result.actress ?? [];
-      const withImages = rawActresses.filter(a => a.imageURL?.medium && a.imageURL.medium !== '');
+      // ActressSearch API は large/small のみ返す（medium は存在しない）
+      const withImages = rawActresses.filter(a => a.imageURL?.large || a.imageURL?.small);
       console.log('[swipe-deck] raw count:', rawActresses.length, 'with images:', withImages.length);
-      if (rawActresses.length > 0) {
-        const sample = rawActresses[0];
-        console.log('[swipe-deck] sample actress:', JSON.stringify({ name: sample.name, imageURL: sample.imageURL }));
-      }
 
       const actresses: SwipeDeckActress[] = withImages
         .map(a => {
@@ -117,15 +114,13 @@ export async function GET() {
           return {
             id: a.id,
             name: a.name,
-            imageUrl: a.imageURL!.medium!,
+            imageUrl: a.imageURL!.large ?? a.imageURL!.small!,
             tags,
           };
         })
         .slice(0, 20);
 
       console.log('[swipe-deck] final actresses count:', actresses.length);
-
-      console.log('[swipe-deck] actresses with images:', actresses.length);
 
       if (actresses.length < 5) throw new Error(`Too few actresses with images: ${actresses.length}`);
 
