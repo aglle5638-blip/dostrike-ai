@@ -91,8 +91,15 @@ export async function GET() {
         throw new Error(`ActressSearch API status=${data.result.status}`);
       }
 
-      const actresses: SwipeDeckActress[] = (data.result.actress ?? [])
-        .filter(a => a.imageURL?.medium && a.imageURL.medium !== '')
+      const rawActresses = data.result.actress ?? [];
+      const withImages = rawActresses.filter(a => a.imageURL?.medium && a.imageURL.medium !== '');
+      console.log('[swipe-deck] raw count:', rawActresses.length, 'with images:', withImages.length);
+      if (rawActresses.length > 0) {
+        const sample = rawActresses[0];
+        console.log('[swipe-deck] sample actress:', JSON.stringify({ name: sample.name, imageURL: sample.imageURL }));
+      }
+
+      const actresses: SwipeDeckActress[] = withImages
         .map(a => {
           const tags: string[] = [];
           // スリーサイズからタグ生成
@@ -115,6 +122,8 @@ export async function GET() {
           };
         })
         .slice(0, 20);
+
+      console.log('[swipe-deck] final actresses count:', actresses.length);
 
       console.log('[swipe-deck] actresses with images:', actresses.length);
 
