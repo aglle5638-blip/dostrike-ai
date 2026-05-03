@@ -40,30 +40,33 @@ export async function GET() {
   // ── 本番: FANZA ActressSearch ─────────────────────────────────────
   if (affiliateId && apiKey) {
     try {
-      // 多様性を確保するため複数オフセットで取得してシャッフル
-      const offsets = [1, 51, 101, 201, 401];
-      const randomOffset = offsets[Math.floor(Math.random() * offsets.length)];
+      // 多様性を確保するためランダムオフセットで取得（ActressSearch は sort=popular 非対応）
+      const randomOffset = Math.floor(Math.random() * 5) * 20 + 1; // 1,21,41,61,81
 
       const params = new URLSearchParams({
         site:         'FANZA',
         hits:         '30',
         offset:       String(randomOffset),
-        sort:         'popular',
         affiliate_id: affiliateId,
         api_id:       apiKey,
         output:       'json',
       });
 
-      const res = await fetch(
-        `https://api.dmm.com/affiliate/v3/ActressSearch?${params}`,
-        { next: { revalidate: 3600 } }
-      );
+      const url = `https://api.dmm.com/affiliate/v3/ActressSearch?${params}`;
+      console.log('[swipe-deck] fetching:', url.replace(apiKey, '***').replace(affiliateId, '***'));
 
-      if (!res.ok) throw new Error(`ActressSearch ${res.status}`);
+      const res = await fetch(url, { cache: 'no-store' });
+
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`ActressSearch HTTP ${res.status}: ${text.slice(0, 200)}`);
+      }
 
       const data = await res.json() as {
         result: {
           status: string | number;
+          result_count?: number;
+          total_count?: number;
           actress?: Array<{
             id: string;
             name: string;
@@ -79,7 +82,11 @@ export async function GET() {
         };
       };
 
-      if (String(data.result.status) !== '200') throw new Error('ActressSearch status != 200');
+      console.log('[swipe-deck] status:', data.result.status, 'total:', data.result.total_count, 'count:', data.result.result_count);
+
+      if (String(data.result.status) !== '200') {
+        throw new Error(`ActressSearch API status=${data.result.status}`);
+      }
 
       const actresses: SwipeDeckActress[] = (data.result.actress ?? [])
         .filter(a => a.imageURL?.medium && a.imageURL.medium !== '')
@@ -106,11 +113,13 @@ export async function GET() {
         })
         .slice(0, 20);
 
-      if (actresses.length < 5) throw new Error('Too few actresses with images');
+      console.log('[swipe-deck] actresses with images:', actresses.length);
+
+      if (actresses.length < 5) throw new Error(`Too few actresses with images: ${actresses.length}`);
 
       return NextResponse.json({ actresses, source: 'fanza' });
     } catch (err) {
-      console.error('[swipe-deck] FANZA API failed:', err);
+      console.error('[swipe-deck] FANZA API failed:', String(err));
       // モックへフォールバック
     }
   }
