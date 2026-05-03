@@ -230,8 +230,10 @@ export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
+  // CRON_SECRET が設定されている場合のみトークン照合する
+  // 未設定の場合は管理画面からの手動実行を許可する
   if (process.env.NODE_ENV !== 'development') {
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
   }
