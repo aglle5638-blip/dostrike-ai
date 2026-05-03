@@ -193,10 +193,10 @@ export default function FaceTypeGuidePage() {
 
             <div className="bg-card border border-border rounded-2xl p-5 space-y-3">
               {[
-                { step: "①", text: "ドストライクAIのダッシュボードを開く" },
-                { step: "②", text: "「好きなタイプ」スロットから上の30タイプの中で気になるものを1〜5個選択" },
-                { step: "③", text: "AIがFANZAのデータベースからマッチスコア順に作品をピックアップ" },
-                { step: "④", text: "「キープ」「いいね」でフィードバックするとAIの精度が向上" },
+                { step: "①", text: "ドストライクAIにログインしてダッシュボードを開く" },
+                { step: "②", text: "表示される女優写真に対して好み（❤️）か興味なし（✕）をスワイプで答える（10枚）" },
+                { step: "③", text: "AIが好みのタイプを自動判定し、FANZAの作品をマッチスコア順にピックアップ" },
+                { step: "④", text: "「キープ」「いいね」でフィードバックを続けるとAIの精度がさらに向上" },
               ].map(({ step, text }) => (
                 <div key={step} className="flex items-start gap-3">
                   <div className="w-7 h-7 bg-primary text-white rounded-full flex items-center justify-center font-extrabold text-xs flex-shrink-0 mt-0.5">{step}</div>
@@ -212,10 +212,10 @@ export default function FaceTypeGuidePage() {
               <span className="text-primary">4.</span> まとめ
             </h2>
             <p className="text-sm md:text-base mb-4">
-              FANZAで「ドストライク」な作品に出会うためには、まず自分の好みを言語化することが重要です。本記事で紹介した6グループ30タイプを参考に、ぜひご自身の「顔タイプ嗜好」を把握してみてください。
+              FANZAで「ドストライク」な作品に出会うためには、自分の好みを知ることが重要です。本記事で紹介した6グループ30タイプは「自分がどのタイプが好きか」を理解するための参考にしてください。
             </p>
             <p className="text-sm md:text-base mb-6">
-              そして、言語化した好みをドストライクAIに登録することで、膨大なFANZA作品の中から自分に最もマッチした作品が自動でリストアップされます。毎日更新されるレコメンドで、新しいお気に入りを見つけましょう。
+              ドストライクAIでは、女優写真のスワイプ操作だけでAIが好みを自動学習します。言語化しなくても直感的な操作だけで、膨大なFANZA作品の中から自分にマッチした作品が自動でリストアップされます。
             </p>
           </section>
 
@@ -224,8 +224,8 @@ export default function FaceTypeGuidePage() {
         {/* CTA */}
         <div className="mt-12 bg-gradient-to-br from-primary/10 via-card to-card border border-primary/20 rounded-3xl p-8 text-center">
           <p className="text-xs text-foreground/50 mb-1">この記事を読んだら、実際に試してみましょう</p>
-          <h3 className="font-extrabold text-lg mb-2">自分の顔タイプを登録して<br />ドストライク作品を見つける</h3>
-          <p className="text-xs text-foreground/60 mb-5">完全無料・登録1分・FANZAの数万本からAIがマッチング</p>
+          <h3 className="font-extrabold text-lg mb-2">好みの女優をスワイプするだけ<br />ドストライク作品を自動発見</h3>
+          <p className="text-xs text-foreground/60 mb-5">完全無料・10枚スワイプするだけ・FANZAの数万本からAIがマッチング</p>
           <Link
             href="/dashboard"
             className="inline-flex items-center gap-2 px-7 py-3 bg-primary text-white rounded-full font-bold hover:bg-primary/90 transition-colors shadow-[0_4px_20px_rgba(244,63,94,0.3)]"

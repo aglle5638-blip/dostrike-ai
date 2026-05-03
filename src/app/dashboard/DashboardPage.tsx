@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { VideoResult, RecommendResponse, SortBy } from "@/lib/fanza/types";
 import { useAuth } from "@/components/AuthProvider";
+import SwipeOnboarding from "@/components/SwipeOnboarding";
 
 // ============================================================
 // 30パターン 顔系統カタログ定義
@@ -185,6 +186,10 @@ export default function DashboardPage() {
   const searchParams = useSearchParams();
   const { session, isLoading: isAuthLoading } = useAuth();
   const queryMode = searchParams.get('mode');
+
+  // スワイプオンボーディング（好み未設定ユーザーに表示）
+  const [showSwipeOnboarding, setShowSwipeOnboarding] = useState(false);
+  const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
 
   // Modes
   const [viewMode, setViewMode] = useState<ViewMode>({ 
@@ -406,6 +411,26 @@ export default function DashboardPage() {
       loadSlotsFromDB(session.access_token);
     }
   }, [session?.access_token, loadFeedbackFromDB, loadSlotsFromDB]);
+
+  // ── スワイプオンボーディング：好みの未設定チェック ───────────────
+  useEffect(() => {
+    if (isAuthLoading || hasCheckedPreferences) return;
+    if (!session?.access_token) {
+      // 未ログインはスキップ
+      setHasCheckedPreferences(true);
+      return;
+    }
+    // ログイン済み：user_actress_preferences が0件ならオンボーディング表示
+    fetch('/api/actress/preferences/count', {
+      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    })
+      .then(r => r.json())
+      .then((d: { count: number }) => {
+        setHasCheckedPreferences(true);
+        if (d.count === 0) setShowSwipeOnboarding(true);
+      })
+      .catch(() => setHasCheckedPreferences(true));
+  }, [session?.access_token, isAuthLoading, hasCheckedPreferences]);
 
   // ── 動画リスト変化時にコミュニティ統計を取得 ──────────────────────
   useEffect(() => {
@@ -1705,10 +1730,38 @@ export default function DashboardPage() {
         </div>
 
         {/* =======================
-            中央メイン: ユーザー設定＆動画一覧 
+            中央メイン: ユーザー設定＆動画一覧
         ======================== */}
         <div className="xl:col-span-8 min-w-0 flex flex-col">
-          
+
+          {/* ── スワイプオンボーディング（好み未設定時） ─────────────── */}
+          {showSwipeOnboarding && (
+            <div className="fixed inset-0 z-[200] bg-background/95 backdrop-blur-sm flex flex-col animate-in fade-in duration-300 overflow-y-auto">
+              <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-md border-b border-border/50 px-4 py-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-primary" />
+                  <span className="font-extrabold text-sm">ドストライクAI — 初回設定</span>
+                </div>
+                <button
+                  onClick={() => setShowSwipeOnboarding(false)}
+                  className="text-foreground/50 hover:text-foreground text-xs font-bold underline"
+                >
+                  スキップ
+                </button>
+              </div>
+              <div className="flex-1 flex items-start justify-center py-4">
+                <SwipeOnboarding
+                  authToken={session?.access_token}
+                  onComplete={() => {
+                    setShowSwipeOnboarding(false);
+                    // Route 0 を再起動させるためフィードをリフレッシュ
+                    window.location.reload();
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* 最上位ナビゲーションタブ (PC/タブレット用) */}
           <div className="hidden sm:flex bg-card border border-border p-1 rounded-[2rem] items-center mb-4 shadow-sm overflow-hidden z-20">
             <button
