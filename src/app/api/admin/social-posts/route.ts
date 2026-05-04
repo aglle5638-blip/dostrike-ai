@@ -18,11 +18,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 
 function isAuthorized(request: NextRequest): boolean {
-  const authHeader = request.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
   if (process.env.NODE_ENV === 'development') return true;
-  if (!cronSecret) return false;
-  return authHeader === `Bearer ${cronSecret}`;
+  const adminSecret = process.env.ADMIN_SECRET;
+  if (!adminSecret) return false; // 本番では必ず設定すること
+  const header = request.headers.get('x-admin-secret');
+  return header === adminSecret;
 }
 
 export async function GET(request: NextRequest) {

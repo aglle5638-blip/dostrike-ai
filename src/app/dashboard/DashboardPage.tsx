@@ -190,6 +190,13 @@ export default function DashboardPage() {
   // スワイプオンボーディング（好み未設定ユーザーに表示）
   const [showSwipeOnboarding, setShowSwipeOnboarding] = useState(false);
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
+  // スワイプ済み女優数（null = 未取得）
+  const [preferenceCount, setPreferenceCount] = useState<number | null>(null);
+  // パーソナライズ動画（Route 0: user_actress_preferences）
+  const [personalVideos, setPersonalVideos] = useState<VideoResult[]>([]);
+  const [isLoadingPersonalVideos, setIsLoadingPersonalVideos] = useState(false);
+  // スワイプ完了後の動画リフレッシュトリガー
+  const [personalRefreshKey, setPersonalRefreshKey] = useState(0);
 
   // Modes
   const [viewMode, setViewMode] = useState<ViewMode>({ 
@@ -427,9 +434,11 @@ export default function DashboardPage() {
       .then(r => r.json())
       .then((d: { count: number }) => {
         setHasCheckedPreferences(true);
+        setPreferenceCount(d.count);
+        // 好みが未登録の場合のみオンボーディング表示
         if (d.count === 0) setShowSwipeOnboarding(true);
       })
-      .catch(() => setHasCheckedPreferences(true));
+      .catch(() => { setHasCheckedPreferences(true); setPreferenceCount(0); });
   }, [session?.access_token, isAuthLoading, hasCheckedPreferences]);
 
   // ── 動画リスト変化時にコミュニティ統計を取得 ──────────────────────
@@ -461,6 +470,33 @@ export default function DashboardPage() {
   useEffect(() => {
     if (viewMode.type === 'trend') setTrendPage(0);
   }, [viewMode]);
+
+  // ── ドストライク選抜：Route 0（user_actress_preferences）からパーソナライズ動画取得 ──
+  useEffect(() => {
+    if (viewMode.type !== 'personal') return;
+    if (!session?.access_token) return;
+    if (preferenceCount === null || preferenceCount === 0) return;
+    let cancelled = false;
+    setIsLoadingPersonalVideos(true);
+    fetch('/api/videos/recommend', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ slotTypeIds: [], sortBy, limit: 18 }),
+    })
+      .then(r => r.json())
+      .then((data: RecommendResponse) => {
+        if (!cancelled) {
+          setPersonalVideos(data.videos ?? []);
+          setIsLoadingPersonalVideos(false);
+        }
+      })
+      .catch(() => { if (!cancelled) setIsLoadingPersonalVideos(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewMode.type, session?.access_token, sortBy, preferenceCount, personalRefreshKey]);
 
   useEffect(() => {
     if (viewMode.type !== 'trend') return;
@@ -737,245 +773,182 @@ export default function DashboardPage() {
 
 
   /**
-   * モード1：パーソナルAI推し
+   * モード1：ドストライク選抜（スワイプ好み学習 ＋ パーソナライズ動画）
    */
   const renderPersonalMode = () => {
-    const activeType = typeSlots[activeSlotIndex] ?? null;
-    const filledSlots = typeSlots.filter(Boolean).length;
-
     return (
       <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-        {/* タイプ選択エリア */}
-        <div className="flex flex-col bg-card border border-border p-3 md:p-4 rounded-2xl gap-3 shadow-md relative overflow-hidden mb-5">
+
+        {/* ── 好み設定カード ────────────────────────────────────── */}
+        <div className="flex flex-col bg-card border border-border p-4 md:p-5 rounded-2xl shadow-md relative overflow-hidden mb-5">
           <div className="absolute top-0 right-0 p-24 bg-primary/5 blur-[100px] rounded-full -z-10" />
-          <div className="z-10 flex items-baseline gap-2 flex-wrap">
-            <h2 className="text-sm md:text-base font-extrabold tracking-tight whitespace-nowrap">あなたの好きなタイプ</h2>
-            <p className="text-foreground/50 text-[10px] font-bold whitespace-nowrap">30パターン・最大5つ登録</p>
-          </div>
-
-          {/* 5 Slots */}
-          <div className="z-10 flex gap-3 items-end overflow-x-auto no-scrollbar pt-3 pb-2 px-1">
-            {isSlotsLoading ? (
-              [0,1,2,3,4].map(i => (
-                <div key={i} className={`flex-shrink-0 rounded-2xl animate-pulse bg-secondary/70 ${i === 0 ? 'w-[72px] h-[72px] md:w-[84px] md:h-[84px]' : 'w-12 h-12 md:w-14 md:h-14'}`} />
-              ))
-            ) : null}
-            {!isSlotsLoading && typeSlots.map((slot, i) => {
-              const isActive = i === activeSlotIndex && slot !== null;
-              const sizeClass = slot
-                ? isActive
-                  ? 'w-[72px] h-[72px] md:w-[84px] md:h-[84px]'
-                  : 'w-12 h-12 md:w-14 md:h-14'
-                : 'w-12 h-12 md:w-14 md:h-14';
-              return (
-                <div key={i} className="snap-start relative flex-shrink-0 mt-1 mr-1 group">
-                  <div
-                    onClick={() => slot ? setActiveSlotIndex(i) : handleOpenCatalog(i)}
-                    className={`relative rounded-2xl cursor-pointer transition-all duration-300 border-2 overflow-hidden ${sizeClass} ${
-                      slot
-                        ? isActive
-                          ? 'border-primary shadow-[0_0_16px_rgba(244,63,94,0.45)]'
-                          : 'border-primary/30 opacity-75 hover:opacity-100 hover:border-primary/60'
-                        : 'border-dashed border-border/50 bg-secondary/50 hover:border-primary/50 hover:bg-primary/5'
-                    }`}
-                  >
-                    {slot ? (
-                      <>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={`/faces/${slot.id}.jpg`} alt={slot.name} className="w-full h-full object-cover" />
-                        {isActive && (
-                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2">
-                            <div className="bg-primary rounded-full p-0.5 shadow-sm">
-                              <Sparkles className="w-2.5 h-2.5 text-white" />
-                            </div>
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Plus className="w-4 h-4 text-foreground/30 group-hover:text-primary transition-colors" />
-                      </div>
-                    )}
-                  </div>
-                  {slot && (
-                    <button
-                      onClick={(e) => handleClearSlot(e, i)}
-                      className="absolute -top-2 -right-2 w-5 h-5 flex items-center justify-center bg-foreground text-background rounded-full shadow-md hover:bg-red-500 hover:text-white transition-colors z-20 md:opacity-0 group-hover:opacity-100"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          {/* アクティブタイプ情報 */}
-          {activeType && (
-            <div
-              className="z-10 flex items-center gap-2 bg-secondary/50 rounded-xl px-3 py-2 border border-border/50"
-            >
-              <span className="text-lg">{activeType.emoji}</span>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-extrabold text-foreground truncate">{activeType.name}</p>
-                <div className="flex gap-1 mt-0.5 flex-wrap">
-                  {activeType.keywords.slice(0, 4).map(k => (
-                    <span key={k} className="text-[9px] font-bold bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">#{k}</span>
-                  ))}
-                </div>
+          {preferenceCount === null ? (
+            /* ローディング */
+            <div className="flex items-center gap-3 py-1">
+              <div className="w-10 h-10 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="h-3 bg-secondary/60 rounded animate-pulse w-3/4" />
+                <div className="h-3 bg-secondary/40 rounded animate-pulse w-1/2" />
               </div>
+            </div>
+          ) : preferenceCount === 0 ? (
+            /* 好み未設定 */
+            <div className="text-center py-6">
+              <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                <Heart className="w-8 h-8 text-primary" />
+              </div>
+              <h2 className="text-sm md:text-base font-extrabold mb-1.5">好みの女優をスワイプして教える</h2>
+              <p className="text-foreground/60 text-[11px] mb-5 leading-relaxed">
+                10枚の写真を左右にスワイプするだけ。<br />AIがあなただけの作品をリストアップします。
+              </p>
+              <button
+                onClick={() => setShowSwipeOnboarding(true)}
+                className="px-6 py-3 bg-primary text-white rounded-full font-extrabold text-sm hover:bg-primary/90 transition-all shadow-md shadow-primary/20"
+              >
+                今すぐスワイプする →
+              </button>
+            </div>
+          ) : (
+            /* 好み設定済み */
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                <Sparkles className="w-5 h-5 text-primary" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xs md:text-sm font-extrabold">好みを学習済み</h2>
+                <p className="text-[10px] text-foreground/50">{preferenceCount}人の女優をスワイプ済み · AIが随時更新中</p>
+              </div>
+              <button
+                onClick={() => setShowSwipeOnboarding(true)}
+                className="flex-shrink-0 text-[10px] font-bold text-primary border border-primary/30 px-3 py-1.5 rounded-full hover:bg-primary/5 transition-colors whitespace-nowrap"
+              >
+                再設定
+              </button>
             </div>
           )}
         </div>
 
-        <div className="relative z-10 transition-opacity duration-1000 min-h-[500px]">
-          {!activeType ? (
-            <div className="text-center p-12 bg-card border border-border rounded-3xl mt-4 shadow-sm">
-               <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
-               <h3 className="text-lg font-bold text-foreground/80 mb-2">好きなタイプを登録してください</h3>
-               <p className="text-foreground/60 text-sm">上のエリアから好みのタイプを選ぶと、AIがマッチした動画を表示します。</p>
-               <button onClick={() => handleOpenCatalog(0)} className="mt-5 px-5 py-2.5 bg-primary text-white rounded-full font-bold text-sm hover:bg-primary/90 transition-colors">
-                 タイプを選ぶ →
-               </button>
-            </div>
-          ) : (
-            <div className="transition-opacity duration-500 opacity-100" key={activeSlotIndex}>
-
-              <div className="bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm mb-5 flex flex-row items-center gap-3">
-                 <div className="bg-primary p-2 md:p-3 rounded-lg shadow-[0_0_15px_rgba(244,63,94,0.3)] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
-                    <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
-                    <span className="text-white font-extrabold text-[8px] md:text-[10px]">日替わり</span>
-                 </div>
-                 <div className="flex-1">
-                    <h3 className="font-extrabold flex items-center text-foreground mb-0.5 text-xs md:text-sm">
-                      📅 本日のおすすめ
-                    </h3>
-                    <p className="text-foreground/70 text-[10px] md:text-xs leading-tight font-medium">
-                      AIがあなたの好みを学習し、数万本のデータベースから<strong className="text-primary font-bold">本日最もマッチした作品を厳選して</strong>お届けします。
-                    </p>
-                 </div>
+        {/* ── パーソナライズ動画グリッド ──────────────────────────── */}
+        {preferenceCount === null ? null : preferenceCount === 0 ? (
+          /* 好み未設定時の空欄 */
+          <div className="text-center p-12 bg-card border border-border rounded-3xl mt-4 shadow-sm">
+            <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
+            <h3 className="text-base font-bold text-foreground/70 mb-2">スワイプ後にここに表示されます</h3>
+            <p className="text-foreground/50 text-xs">好みを登録すると、AIが厳選したおすすめ作品が表示されます。</p>
+            <button
+              onClick={() => setShowSwipeOnboarding(true)}
+              className="mt-5 px-5 py-2.5 bg-primary text-white rounded-full font-bold text-sm hover:bg-primary/90 transition-colors"
+            >
+              今すぐスワイプ →
+            </button>
+          </div>
+        ) : (
+          <div className="relative z-10 min-h-[500px]">
+            {/* 日替わりバナー */}
+            <div className="bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm mb-5 flex flex-row items-center gap-3">
+              <div className="bg-primary p-2 md:p-3 rounded-lg shadow-[0_0_15px_rgba(244,63,94,0.3)] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
+                <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
+                <span className="text-white font-extrabold text-[8px] md:text-[10px]">日替わり</span>
               </div>
+              <div className="flex-1">
+                <h3 className="font-extrabold flex items-center text-foreground mb-0.5 text-xs md:text-sm">
+                  📅 本日のおすすめ
+                </h3>
+                <p className="text-foreground/70 text-[10px] md:text-xs leading-tight font-medium">
+                  AIがあなたの好みを学習し、数万本のデータベースから<strong className="text-primary font-bold">本日最もマッチした作品を厳選して</strong>お届けします。
+                </p>
+              </div>
+            </div>
 
+            {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /><span className="text-base md:text-xl">AIマッチ結果</span></>)}
 
-              {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /> <span className="text-base md:text-xl">AIマッチ結果</span></>)}
-
-              {/* Loading skeleton */}
-              {isLoadingVideos && (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
-                  {[1,2,3,4,5,6].map(i => (
-                    <div key={i} className="flex flex-col gap-1.5 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                      {/* サムネイル */}
-                      <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse relative overflow-hidden">
-                        <div className="absolute top-2 left-2 w-12 h-4 bg-secondary rounded-lg animate-pulse" />
-                      </div>
-                      {/* タイトル行 */}
-                      <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-full" />
-                      <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-4/5" />
-                      {/* ボタン行 */}
-                      <div className="flex gap-1 mt-1">
-                        <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
-                        <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
-                        <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
-                      </div>
+            {/* ローディングスケルトン */}
+            {isLoadingPersonalVideos && (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
+                {[1,2,3,4,5,6].map(i => (
+                  <div key={i} className="flex flex-col gap-1.5 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                    <div className="aspect-video bg-secondary/60 rounded-2xl animate-pulse relative overflow-hidden">
+                      <div className="absolute top-2 left-2 w-12 h-4 bg-secondary rounded-lg animate-pulse" />
                     </div>
-                  ))}
-                </div>
-              )}
+                    <div className="h-3 bg-secondary/60 rounded-full animate-pulse w-full" />
+                    <div className="h-3 bg-secondary/40 rounded-full animate-pulse w-4/5" />
+                    <div className="flex gap-1 mt-1">
+                      <div className="w-8 h-8 rounded-full bg-secondary/60 animate-pulse flex-shrink-0" />
+                      <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                      <div className="flex-1 h-8 rounded-full bg-secondary/50 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
-              {/* Error state */}
-              {!isLoadingVideos && videoError && (
-                <div className="mt-4 p-6 bg-card border border-border/50 rounded-2xl text-center">
-                  <p className="text-sm text-foreground/60">{videoError}</p>
-                  <button
-                    onClick={() => {
-                      const filledTypeIds = typeSlots.filter(Boolean).map(s => s!.id);
-                      if (!filledTypeIds.length) return;
-                      setIsLoadingVideos(true);
-                      setVideoError(null);
-                      fetch('/api/videos/recommend', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ slotTypeIds: filledTypeIds, sortBy, limit: 6 }),
-                      })
-                        .then(r => r.json())
-                        .then((data: RecommendResponse) => { setVideos(data.videos ?? []); setIsLoadingVideos(false); })
-                        .catch(() => { setVideoError('推薦の取得に失敗しました。'); setIsLoadingVideos(false); });
-                    }}
-                    className="mt-3 px-4 py-2 bg-primary text-white rounded-full text-xs font-bold hover:bg-primary/90 transition-colors"
-                  >再試行</button>
-                </div>
-              )}
-
-              {/* Video grid */}
-              {!isLoadingVideos && !videoError && videos.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
-                  {/* FANZA広告スロット（6動画 + 2広告 = 4列×2行を埋める） */}
-                  {videos.map((video) => {
-                    const fb = feedback[video.id];
-                    if (fb === 'change') {
-                      return (
-                        <div key={video.id} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
-                          <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-                          <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
-                        </div>
-                      );
-                    }
+            {/* 動画グリッド */}
+            {!isLoadingPersonalVideos && personalVideos.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
+                {personalVideos.map((video) => {
+                  const fb = feedback[video.id];
+                  if (fb === 'change') {
                     return (
-                      <div key={video.id} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                        <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
-                          <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={video.thumbnailUrl} alt={video.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                            <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
-                              <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
-                                <Sparkles className="w-3 h-3 text-primary mr-1" />
-                                <span className="text-white font-extrabold text-[10px] tracking-wide">{video.matchScore}%</span>
-                              </div>
-                              {video.source === 'mock' && (
-                                <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
-                              )}
-                              {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
-                              {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
+                      <div key={video.id} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
+                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
+                        <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={video.id} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                      <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
+                        <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={video.thumbnailUrl} alt={video.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                          <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
+                            <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
+                              <Sparkles className="w-3 h-3 text-primary mr-1" />
+                              <span className="text-white font-extrabold text-[10px] tracking-wide">{video.matchScore}%</span>
                             </div>
-                            {/* ホバーオーバーレイ：再生 ＋ レビュー */}
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
-                                className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
-                              >
-                                <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                              </button>
-                              <a
-                                href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
-                              </a>
-                            </div>
+                            {video.source === 'mock' && (
+                              <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
+                            )}
+                            {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
+                            {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                           </div>
-                          {/* スマホ用アクションボタン（常時表示） */}
-                          <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
                             <button
                               onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
-                              className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                              className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                             >
-                              <Play className="w-3 h-3 fill-current" /> サンプル再生
+                              <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
                             </button>
                             <a
                               href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
+                              className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              <MessageSquare className="w-3 h-3" /> レビューを見る
+                              <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
                             </a>
                           </div>
-                          <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
-                            <div className="h-[2.8rem] overflow-hidden">
+                        </div>
+                        <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                          <button
+                            onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                            className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                          >
+                            <Play className="w-3 h-3 fill-current" /> サンプル再生
+                          </button>
+                          <a
+                            href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <MessageSquare className="w-3 h-3" /> レビューを見る
+                          </a>
+                        </div>
+                        <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                          <div className="h-[2.8rem] overflow-hidden">
                             <a
                               href={video.affiliateUrl}
                               target="_blank"
@@ -984,115 +957,114 @@ export default function DashboardPage() {
                             >
                               {video.title}
                             </a>
-                            </div>
-                            {/* 女優名 ＋ ⭐レビュー評価 */}
-                            <div className="flex items-center justify-between gap-1 min-w-0">
-                              {video.actress && (
-                                <div className="text-[10px] text-foreground/50 truncate flex-1">{video.actress}</div>
-                              )}
-                              {video.reviewAverage != null && (
-                                <div className="flex items-center gap-0.5 flex-shrink-0">
-                                  <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                                  <span className="text-[10px] font-bold text-foreground/70">{video.reviewAverage.toFixed(1)}</span>
-                                  {video.reviewCount != null && (
-                                    <span className="text-[9px] text-foreground/40">({video.reviewCount.toLocaleString()})</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            {/* コミュニティ統計 */}
-                            {(() => {
-                              const stat = videoStats[video.id];
-                              if (!stat || stat.total === 0) return null;
-                              const pct = Math.round((stat.strikeCount / stat.total) * 100);
-                              return (
-                                <div className="flex items-center gap-1 mt-0.5">
-                                  <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
-                                  <span className="text-[9px] text-foreground/40 font-bold">
-                                    {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
-                                  </span>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        </div>
-                        <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
-                          <button onClick={() => handleFeedback(video.id, 'change', video)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
-                            <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
-                          </button>
-                          <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
-                            <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
-                            <span>キープ</span>
-                          </button>
-                          <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
-                            <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
-                            <span>いいね</span>
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {/* 広告スロット×2（7枠目・8枠目）：FANZAランキング動画サムネイルを使用 */}
-                  {adVideos.slice(0, 2).map((adVideo, adIdx) => (
-                    <a
-                      key={`ad-${adVideo.id}-${adIdx}`}
-                      href={adVideo.affiliateUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none group"
-                    >
-                      <div className="relative bg-card border border-primary/25 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/60 transition-all duration-300">
-                        <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                          {/* PRバッジ */}
-                          <div className="absolute top-2 left-2 flex gap-1.5">
-                            <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-extrabold text-[10px] tracking-wide shadow-lg">PR</div>
-                          </div>
-                          {/* ホバーオーバーレイ */}
-                          <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                            <span className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-5 rounded-full text-[10px] font-extrabold shadow-lg">
-                              FANZAで見る →
-                            </span>
-                          </div>
-                        </div>
-                        {/* スマホ用ボタン（常時表示） */}
-                        <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                          <span className="flex flex-1 items-center justify-center gap-1 bg-primary text-white py-1.5 rounded-lg text-[10px] font-bold">
-                            FANZAで見る →
-                          </span>
-                        </div>
-                        <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
-                          <div className="h-[2.8rem] overflow-hidden">
-                            <p className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">
-                              {adVideo.title}
-                            </p>
                           </div>
                           <div className="flex items-center justify-between gap-1 min-w-0">
-                            {adVideo.actress && (
-                              <div className="text-[10px] text-foreground/50 truncate flex-1">{adVideo.actress}</div>
+                            {video.actress && (
+                              <div className="text-[10px] text-foreground/50 truncate flex-1">{video.actress}</div>
                             )}
-                            {adVideo.reviewAverage != null && (
+                            {video.reviewAverage != null && (
                               <div className="flex items-center gap-0.5 flex-shrink-0">
                                 <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                                <span className="text-[10px] font-bold text-foreground/70">{adVideo.reviewAverage.toFixed(1)}</span>
+                                <span className="text-[10px] font-bold text-foreground/70">{video.reviewAverage.toFixed(1)}</span>
+                                {video.reviewCount != null && (
+                                  <span className="text-[9px] text-foreground/40">({video.reviewCount.toLocaleString()})</span>
+                                )}
                               </div>
                             )}
                           </div>
+                          {(() => {
+                            const stat = videoStats[video.id];
+                            if (!stat || stat.total === 0) return null;
+                            const pct = Math.round((stat.strikeCount / stat.total) * 100);
+                            return (
+                              <div className="flex items-center gap-1 mt-0.5">
+                                <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
+                                <span className="text-[9px] text-foreground/40 font-bold">
+                                  {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
+                                </span>
+                              </div>
+                            );
+                          })()}
                         </div>
                       </div>
-                      <div className="flex">
-                        <span className="flex flex-1 items-center justify-center gap-1.5 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] bg-primary/10 text-primary border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
-                          FANZAで今すぐ見る →
+                      <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
+                        <button onClick={() => handleFeedback(video.id, 'change', video)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
+                          <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
+                        </button>
+                        <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
+                          <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
+                          <span>キープ</span>
+                        </button>
+                        <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
+                          <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
+                          <span>いいね</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {/* 広告スロット×2（グリッドの最後に配置） */}
+                {adVideos.slice(0, 2).map((adVideo, adIdx) => (
+                  <a
+                    key={`ad-${adVideo.id}-${adIdx}`}
+                    href={adVideo.affiliateUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none group"
+                  >
+                    <div className="relative bg-card border border-primary/25 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/60 transition-all duration-300">
+                      <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                        <div className="absolute top-2 left-2 flex gap-1.5">
+                          <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-extrabold text-[10px] tracking-wide shadow-lg">PR</div>
+                        </div>
+                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                          <span className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-5 rounded-full text-[10px] font-extrabold shadow-lg">
+                            FANZAで見る →
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                        <span className="flex flex-1 items-center justify-center gap-1 bg-primary text-white py-1.5 rounded-lg text-[10px] font-bold">
+                          FANZAで見る →
                         </span>
                       </div>
-                    </a>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+                      <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                        <div className="h-[2.8rem] overflow-hidden">
+                          <p className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">{adVideo.title}</p>
+                        </div>
+                        <div className="flex items-center justify-between gap-1 min-w-0">
+                          {adVideo.actress && <div className="text-[10px] text-foreground/50 truncate flex-1">{adVideo.actress}</div>}
+                          {adVideo.reviewAverage != null && (
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                              <span className="text-[10px] font-bold text-foreground/70">{adVideo.reviewAverage.toFixed(1)}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex">
+                      <span className="flex flex-1 items-center justify-center gap-1.5 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] bg-primary/10 text-primary border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
+                        FANZAで今すぐ見る →
+                      </span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+
+            {/* 動画なし（フォールバック） */}
+            {!isLoadingPersonalVideos && personalVideos.length === 0 && (
+              <div className="text-center p-12 bg-card border border-border rounded-3xl mt-4 shadow-sm">
+                <Sparkles className="w-12 h-12 text-primary/30 mx-auto mb-4" />
+                <h3 className="text-base font-bold text-foreground/70 mb-2">作品を探しています...</h3>
+                <p className="text-foreground/50 text-xs">しばらく待ってからページを更新してください。</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };

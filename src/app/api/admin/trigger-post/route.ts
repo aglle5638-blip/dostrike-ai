@@ -8,6 +8,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(request: NextRequest) {
+  // ADMIN_SECRET 認証
+  if (process.env.NODE_ENV !== 'development') {
+    const adminSecret = process.env.ADMIN_SECRET;
+    const header = request.headers.get('x-admin-secret');
+    if (!adminSecret || header !== adminSecret) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   const cronSecret = process.env.CRON_SECRET;
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
 
