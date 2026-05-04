@@ -26,8 +26,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/server';
 import {
-  pickTemplate,
-  getTodayFaceTypeId,
+  getTodayMarketingSet,
+  pickInstagramTemplate,
+  fillTemplate,
   truncateForX,
   X_TIME_TEMPLATES,
   SITE_URL,
@@ -312,30 +313,31 @@ export async function POST(request: NextRequest) {
   const timeSlot = jstHour < 10 ? 'morning' : jstHour < 17 ? 'noon' : 'evening';
 
   // ── コンテンツ選択 ────────────────────────────────────────────────────────
-  const faceTypeId = getTodayFaceTypeId();
+  const marketingSet = getTodayMarketingSet();
+  const faceTypeId = marketingSet.id; // DB保存用の識別子として利用
 
-  // 時間帯別テンプレートを50%、汎用CTAテンプレートを50%で使用
-  const useTimeTemplate = Math.random() < 0.5;
+  // 時間帯別テンプレートを使うか、通常セットのテンプレートを使うか
+  const useTimeTemplate = marketingSet.id === 'ui_mockup' && Math.random() < 0.5;
   const timeTemplates = X_TIME_TEMPLATES[timeSlot];
-  const rawXText = useTimeTemplate && timeTemplates?.length
-    ? timeTemplates[Math.floor(Math.random() * timeTemplates.length)].replace('{URL}', SITE_URL)
-    : pickTemplate('x', faceTypeId);
+  
+  let rawXText = '';
+  if (useTimeTemplate && timeTemplates?.length) {
+    rawXText = timeTemplates[Math.floor(Math.random() * timeTemplates.length)];
+  } else {
+    rawXText = marketingSet.templates[Math.floor(Math.random() * marketingSet.templates.length)];
+  }
+  rawXText = fillTemplate(rawXText, { URL: SITE_URL });
+  
   const xText = truncateForX(rawXText);
-  const igCaption = pickTemplate('instagram');
+  const igCaption = pickInstagramTemplate();
 
   results.faceTypeId = faceTypeId;
   results.timeSlot = timeSlot;
   results.xTextLength = xText.length;
 
   // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
-  // POST_IMAGES_BASE_URL が設定されていれば画像を添付（なければテキストのみ）
-  // 画像は beauty_a.png / beauty_b.png / beauty_c.png をローテーション
-  // ※ より際どい画像に差し替える場合は public/post-images/ に追加してください
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
-  const IMAGE_NAMES = ['beauty_a.png', 'beauty_b.png', 'beauty_c.png'];
-  const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
-  const imageFile = IMAGE_NAMES[dayIndex % IMAGE_NAMES.length];
-  const imageUrl = `${baseUrl}/post-images/${imageFile}`;
+  const imageUrl = `${baseUrl}/post-images/${marketingSet.imageFile}`;
 
   let xMediaId: string | null = null;
   try {

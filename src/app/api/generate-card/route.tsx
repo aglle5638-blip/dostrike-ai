@@ -14,25 +14,24 @@
 
 import { ImageResponse } from 'next/og';
 import { NextRequest } from 'next/server';
-import { FACE_TYPES, type FaceTypeId } from '@/lib/social-templates';
+import { MARKETING_SETS } from '@/lib/social-templates';
 
 export const runtime = 'edge';
 
-// カード背景グラデーション（顔タイプグループ別）
+// カード背景グラデーション
 const GROUP_STYLES: Record<string, { bg: string; accent: string }> = {
-  '清楚系':   { bg: 'linear-gradient(135deg, #1a0a14 0%, #3d1533 100%)', accent: '#f472b6' },
-  'キュート系': { bg: 'linear-gradient(135deg, #1a0a1e 0%, #4a1060 100%)', accent: '#e879f9' },
-  'お姉さん系': { bg: 'linear-gradient(135deg, #0f0a1a 0%, #2d1460 100%)', accent: '#a78bfa' },
-  'ギャル系':   { bg: 'linear-gradient(135deg, #1a0800 0%, #7c2d12 100%)', accent: '#fb923c' },
-  'クール系':   { bg: 'linear-gradient(135deg, #030712 0%, #0f172a 100%)', accent: '#38bdf8' },
-  'その他':     { bg: 'linear-gradient(135deg, #0a1a0a 0%, #14532d 100%)', accent: '#4ade80' },
+  'type_a':    { bg: 'linear-gradient(135deg, #1a0a14 0%, #3d1533 100%)', accent: '#f472b6' },
+  'type_b':    { bg: 'linear-gradient(135deg, #1a0800 0%, #7c2d12 100%)', accent: '#fb923c' },
+  'type_c':    { bg: 'linear-gradient(135deg, #030712 0%, #0f172a 100%)', accent: '#38bdf8' },
+  'ui_mockup': { bg: 'linear-gradient(135deg, #0a1a0a 0%, #14532d 100%)', accent: '#4ade80' },
 };
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const typeId = (searchParams.get('type') ?? 'A1') as FaceTypeId;
-  const ft = FACE_TYPES[typeId] ?? FACE_TYPES['A1'];
-  const style = GROUP_STYLES[ft.group] ?? GROUP_STYLES['清楚系'];
+  const typeId = searchParams.get('type') ?? 'type_a';
+  
+  const set = MARKETING_SETS.find(s => s.id === typeId) ?? MARKETING_SETS[0];
+  const style = GROUP_STYLES[set.id] ?? GROUP_STYLES['type_a'];
 
   return new ImageResponse(
     (
@@ -106,8 +105,8 @@ export async function GET(request: NextRequest) {
             gap: 32,
           }}
         >
-          {/* 絵文字 */}
-          <div style={{ fontSize: 140, lineHeight: 1 }}>{ft.emoji}</div>
+          {/* 絵文字代わりのアイコン */}
+          <div style={{ fontSize: 140, lineHeight: 1 }}>✨</div>
 
           {/* タイプ名 */}
           <div
@@ -127,7 +126,7 @@ export async function GET(request: NextRequest) {
                 textTransform: 'uppercase',
               }}
             >
-              {ft.group}
+              SWIPE AI
             </div>
             <div
               style={{
@@ -138,7 +137,7 @@ export async function GET(request: NextRequest) {
                 letterSpacing: -2,
               }}
             >
-              {ft.name}
+              {set.label}
             </div>
           </div>
 
@@ -154,7 +153,7 @@ export async function GET(request: NextRequest) {
               fontWeight: 700,
             }}
           >
-            顔タイプ #{typeId}
+            #{set.id}
           </div>
         </div>
 
@@ -170,7 +169,7 @@ export async function GET(request: NextRequest) {
           }}
         >
           <div style={{ color: '#94a3b8', fontSize: 18, fontWeight: 600 }}>
-            30タイプから好みを選ぶだけ
+            好みをスワイプするだけでドストライクを提案
           </div>
           <div style={{ color: '#64748b', fontSize: 16 }}>
             dostrike-ai.vercel.app
