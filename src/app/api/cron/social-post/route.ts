@@ -147,7 +147,7 @@ function buildOAuthHeader(
  */
 async function postToX(
   text: string,
-  mediaId?: string | null,
+  mediaIds?: string[],
 ): Promise<{ id: string } | { error: string } | null> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
@@ -172,7 +172,7 @@ async function postToX(
 
   const authHeader = buildOAuthHeader(method, url, {}, oauthParams);
   const payload: Record<string, unknown> = { text };
-  if (mediaId) payload.media = { media_ids: [mediaId] };
+  if (mediaIds && mediaIds.length > 0) payload.media = { media_ids: mediaIds };
   const body = JSON.stringify(payload);
 
   const res = await fetch(url, {
@@ -337,21 +337,36 @@ export async function POST(request: NextRequest) {
 
   // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
-  const imageUrl = `${baseUrl}/post-images/${marketingSet.imageFile}`;
-
-  let xMediaId: string | null = null;
-  try {
-    xMediaId = await uploadImageToX(imageUrl);
-    results.xMediaId = xMediaId ?? 'skipped';
-  } catch (err) {
-    console.warn('[social-post] Image upload failed, posting without image:', err);
+  
+  // 投稿に添付する画像のリスト（メイン画像 + UIモックアップ）
+  const imagesToUpload = [
+    `${baseUrl}/post-images/${marketingSet.imageFile}`
+  ];
+  
+  // もしメイン画像が app_ui.png でなければ、app_ui.png も追加して両方投稿する
+  if (marketingSet.imageFile !== 'app_ui.png') {
+    imagesToUpload.push(`${baseUrl}/post-images/app_ui.png`);
   }
+
+  const uploadedMediaIds: string[] = [];
+  for (const url of imagesToUpload) {
+    try {
+      const mediaId = await uploadImageToX(url);
+      if (mediaId) {
+        uploadedMediaIds.push(mediaId);
+      }
+    } catch (err) {
+      console.warn(`[social-post] Image upload failed for ${url}:`, err);
+    }
+  }
+
+  results.xMediaIds = uploadedMediaIds.length > 0 ? uploadedMediaIds : 'skipped';
 
   // ── X 投稿 ───────────────────────────────────────────────────────────────
   try {
-    const xResult = await postToX(xText, xMediaId);
+    const xResult = await postToX(xText, uploadedMediaIds);
     if (xResult && 'id' in xResult) {
-      results.x = { status: 'posted', postId: xResult.id, hasImage: !!xMediaId };
+      results.x = { status: 'posted', postId: xResult.id, hasImage: uploadedMediaIds.length > 0 };
       await logPost({ platform: 'x', content: xText, post_id: xResult.id, status: 'posted', face_type_id: faceTypeId });
     } else {
       const errMsg = xResult && 'error' in xResult ? xResult.error : 'unknown error';
