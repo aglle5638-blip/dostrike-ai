@@ -82,13 +82,12 @@ function buildOAuthHeader(
  * X API v2 でツイートを投稿する。
  * @returns 成功時は投稿ID、失敗時は null
  */
-async function postToX(text: string): Promise<string | null> {
+async function postToX(text: string): Promise<{ id: string } | { error: string } | null> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
 
   if (!apiKey || !accessToken) {
-    console.warn('[social-post] X API credentials not configured');
-    return null;
+    return { error: 'X API credentials not configured (TWITTER_API_KEY or TWITTER_ACCESS_TOKEN missing)' };
   }
 
   const url = 'https://api.twitter.com/2/tweets';
@@ -106,7 +105,6 @@ async function postToX(text: string): Promise<string | null> {
   };
 
   const authHeader = buildOAuthHeader(method, url, {}, oauthParams);
-
   const body = JSON.stringify({ text });
 
   const res = await fetch(url, {
@@ -119,13 +117,15 @@ async function postToX(text: string): Promise<string | null> {
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    console.error('[social-post] X API error:', res.status, err);
-    return null;
+    const errText = await res.text();
+    console.error('[social-post] X API error:', res.status, errText);
+    return { error: `HTTP ${res.status}: ${errText}` };
   }
 
   const json = await res.json();
-  return json?.data?.id ?? null;
+  const postId = json?.data?.id;
+  if (!postId) return { error: `Unexpected response: ${JSON.stringify(json)}` };
+  return { id: postId };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -249,17 +249,16 @@ export async function POST(request: NextRequest) {
   results.xTextLength = xText.length;
 
   // ── X 投稿 ───────────────────────────────────────────────────────────────
-  let xPostId: string | null = null;
   try {
-    xPostId = await postToX(xText);
-    results.x = xPostId ? { status: 'posted', postId: xPostId } : { status: 'failed' };
-    await logPost({
-      platform: 'x',
-      content: xText,
-      post_id: xPostId,
-      status: xPostId ? 'posted' : 'failed',
-      face_type_id: faceTypeId,
-    });
+    const xResult = await postToX(xText);
+    if (xResult && 'id' in xResult) {
+      results.x = { status: 'posted', postId: xResult.id };
+      await logPost({ platform: 'x', content: xText, post_id: xResult.id, status: 'posted', face_type_id: faceTypeId });
+    } else {
+      const errMsg = xResult && 'error' in xResult ? xResult.error : 'unknown error';
+      results.x = { status: 'failed', error: errMsg };
+      await logPost({ platform: 'x', content: xText, post_id: null, status: 'failed', face_type_id: faceTypeId });
+    }
   } catch (err) {
     console.error('[social-post] X error:', err);
     results.x = { status: 'error', error: String(err) };
