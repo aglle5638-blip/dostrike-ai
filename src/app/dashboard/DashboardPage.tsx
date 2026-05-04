@@ -1726,8 +1726,9 @@ export default function DashboardPage() {
                   authToken={session?.access_token}
                   onComplete={() => {
                     setShowSwipeOnboarding(false);
-                    // Route 0 を再起動させるためフィードをリフレッシュ
-                    window.location.reload();
+                    // 好み数を再取得してパーソナライズ動画もリフレッシュ
+                    setHasCheckedPreferences(false);
+                    setPersonalRefreshKey(k => k + 1);
                   }}
                 />
               </div>
