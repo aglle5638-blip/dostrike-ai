@@ -828,11 +828,11 @@ export default function DashboardPage() {
                 </div>
               )}
 
-              {/* 好み女優グリッド（画像 → FANZAアフィリエイトリンク） */}
+              {/* 好み女優グリッド（丸アイコン → FANZAアフィリエイトリンク） */}
               {preferenceAnalysis && preferenceAnalysis.topActresses.length > 0 && (
                 <div>
-                  <p className="text-[10px] font-bold text-foreground/40 mb-2">あなたが好きな女優</p>
-                  <div className="flex gap-2 flex-wrap">
+                  <p className="text-[10px] font-bold text-foreground/40 mb-2.5">あなたが好きな女優</p>
+                  <div className="flex gap-3 md:gap-4 flex-wrap">
                     {preferenceAnalysis.topActresses.slice(0, 6).map(a => {
                       const fanzaUrl = `https://al.dmm.co.jp/?lurl=${encodeURIComponent(`https://www.dmm.co.jp/digital/videoa/-/list/=/article=actress/id=${a.actress_id}/`)}&af_id=dostrikeai-990&ch=actress_pref`;
                       return (
@@ -841,20 +841,30 @@ export default function DashboardPage() {
                           href={fanzaUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="group flex flex-col items-center gap-1 w-[4.5rem] md:w-20"
+                          className="group flex flex-col items-center gap-1.5 w-[4rem] md:w-[4.5rem]"
                         >
-                          <div className="w-[4.5rem] h-[4.5rem] md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 border-border/50 group-hover:border-primary transition-all shadow-sm relative">
+                          {/* 丸アイコン */}
+                          <div className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden border-2 border-border/60 group-hover:border-primary transition-all shadow-md relative flex-shrink-0">
                             {a.image_url ? (
                               /* eslint-disable-next-line @next/next/no-img-element */
-                              <img src={a.image_url} alt={a.actress_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                              <img
+                                src={a.image_url}
+                                alt={a.actress_name}
+                                className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300"
+                              />
                             ) : (
-                              <div className="w-full h-full bg-primary/10 flex items-center justify-center">
-                                <Heart className="w-5 h-5 text-primary/40" />
+                              <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                                <span className="text-lg font-extrabold text-primary/50">
+                                  {a.actress_name.charAt(0)}
+                                </span>
                               </div>
                             )}
-                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                            {/* ホバーオーバーレイ */}
+                            <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/25 transition-colors duration-300 flex items-center justify-center">
+                              <span className="opacity-0 group-hover:opacity-100 text-white text-[9px] font-bold transition-opacity duration-200">→</span>
+                            </div>
                           </div>
-                          <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2">{a.actress_name}</span>
+                          <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2 w-full">{a.actress_name}</span>
                         </a>
                       );
                     })}

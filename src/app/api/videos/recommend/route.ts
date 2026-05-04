@@ -31,7 +31,9 @@ export async function POST(req: NextRequest) {
     // ── バリデーション ────────────────────────────────────────────
     const { slotTypeIds, sortBy = 'match', limit = 12, offset = 0 } = body;
 
-    if (!body.keyword && (!slotTypeIds || !Array.isArray(slotTypeIds) || slotTypeIds.length === 0)) {
+    // Authヘッダーがある場合はRoute 0（ユーザー好み）が使えるので slotTypeIds=[] を許可
+    const hasAuth = req.headers.get('authorization')?.startsWith('Bearer ') === true;
+    if (!body.keyword && !hasAuth && (!slotTypeIds || !Array.isArray(slotTypeIds) || slotTypeIds.length === 0)) {
       return NextResponse.json(
         { error: 'slotTypeIds は 1 件以上の配列が必要です' },
         { status: 400 }
@@ -116,6 +118,23 @@ export async function POST(req: NextRequest) {
         console.error('[recommend] user preference lookup failed:', prefErr);
         // エラー時は次のルートへ
       }
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Route 0 が実行されたが好みデータなし（＋typeIds も空）の場合は人気動画を返す
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    if (resolvedTypeIds.length === 0) {
+      console.log('[recommend] no typeIds & no preference videos → fallback to popular');
+      const FALLBACK_IDS = ['A1', 'B1', 'C1', 'D1', 'E1'];
+      const result = await fetchVideosByTypeIds(FALLBACK_IDS, {
+        sortBy: validSortBy === 'match' ? 'rank' : validSortBy,
+        limit:  resolvedLimit,
+      });
+      return NextResponse.json({
+        videos:       result.videos,
+        source:       result.source,
+        usedKeywords: result.usedKeywords,
+      } satisfies RecommendResponse);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

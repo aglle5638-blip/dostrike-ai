@@ -206,12 +206,11 @@ export async function fetchVideosByActressIds(
   const apiKey      = process.env.FANZA_API_KEY;
   if (!affiliateId || !apiKey) return [];
 
-  const allVideos: VideoResult[] = [];
-  const seen = new Set<string>();
   const perActress = Math.ceil(limit / actressIds.length);
 
-  for (const actressId of actressIds) {
-    try {
+  // 女優ごとのAPIコールを並列実行（直列→並列でレイテンシ大幅削減）
+  const results = await Promise.allSettled(
+    actressIds.map(async (actressId) => {
       const query = new URLSearchParams({
         site:         'FANZA',
         service:      'digital',
@@ -225,21 +224,23 @@ export async function fetchVideosByActressIds(
         api_id:       apiKey,
         output:       'json',
       });
-
-      const res  = await fetch(`${FANZA_API_BASE}?${query}`, { next: { revalidate: 3600 } });
-      if (!res.ok) continue;
-
+      const res = await fetch(`${FANZA_API_BASE}?${query}`, { next: { revalidate: 3600 } });
+      if (!res.ok) return [];
       const data = (await res.json()) as FanzaApiResponse;
-      if (data.result.status !== 200) continue;
+      if (data.result.status !== 200) return [];
+      return data.result.items ?? [];
+    })
+  );
 
-      for (const item of data.result.items ?? []) {
-        if (!seen.has(item.content_id)) {
-          seen.add(item.content_id);
-          allVideos.push(mapFanzaItemToVideo(item, allVideos.length, affiliateId, []));
-        }
+  const allVideos: VideoResult[] = [];
+  const seen = new Set<string>();
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    for (const item of r.value) {
+      if (!seen.has(item.content_id)) {
+        seen.add(item.content_id);
+        allVideos.push(mapFanzaItemToVideo(item, allVideos.length, affiliateId, []));
       }
-    } catch (err) {
-      console.error(`[fanza/api] fetchVideosByActressIds error for actress ${actressId}:`, err);
     }
   }
 
