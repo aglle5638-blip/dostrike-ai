@@ -305,6 +305,7 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [typeSlots, activeSlotIndex, sortBy]);
   const [keepFilter, setKeepFilter] = useState<'all'|'keep'|'strike'>('all');
+  const [sampleVideoUrl, setSampleVideoUrl] = useState<string | null>(null);
 
   // Undo Toast State
   type UndoToast = { seed: string; prevAction: string; message: string; timerId: ReturnType<typeof setTimeout> } | null;
@@ -995,15 +996,12 @@ export default function DashboardPage() {
                                 {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                               </div>
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                                <a
-                                  href={video.affiliateUrl}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); if (video.sampleMovieUrl) setSampleVideoUrl(video.sampleMovieUrl); else window.open(video.affiliateUrl, '_blank'); }}
                                   className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                                 >
                                   <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                                </a>
+                                </button>
                                 <a
                                   href={video.affiliateUrl}
                                   target="_blank"
@@ -1016,15 +1014,12 @@ export default function DashboardPage() {
                               </div>
                             </div>
                             <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                              <a
-                                href={video.affiliateUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                onClick={(e) => e.stopPropagation()}
-                                className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                              <button
+                                onClick={(e) => { e.stopPropagation(); if (video.sampleMovieUrl) setSampleVideoUrl(video.sampleMovieUrl); else window.open(video.affiliateUrl, '_blank'); }}
+                                className="flex flex-1 items-center justify-center justify-center bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
                               >
                                 サンプル再生
-                              </a>
+                              </button>
                               <a
                                 href={video.affiliateUrl}
                                 target="_blank"
@@ -1336,15 +1331,12 @@ export default function DashboardPage() {
 
                       {/* ホバーオーバーレイ */}
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                        <a
-                          href={v.affiliateUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); if (v.sampleMovieUrl) setSampleVideoUrl(v.sampleMovieUrl); else window.open(v.affiliateUrl, '_blank'); }}
                           className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                         >
                           <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                        </a>
+                        </button>
                         <a
                           href={v.affiliateUrl}
                           target="_blank"
@@ -1359,15 +1351,12 @@ export default function DashboardPage() {
 
                     {/* スマホ用アクションボタン（常時表示） */}
                     <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                      <a
-                        href={v.affiliateUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                      <button
+                        onClick={(e) => { e.stopPropagation(); if (v.sampleMovieUrl) setSampleVideoUrl(v.sampleMovieUrl); else window.open(v.affiliateUrl, '_blank'); }}
+                        className="flex flex-1 items-center justify-center bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
                       >
                         サンプル再生
-                      </a>
+                      </button>
                       <a
                         href={v.affiliateUrl}
                         target="_blank"
@@ -2028,7 +2017,36 @@ export default function DashboardPage() {
       {/* カタログモーダル */}
       {showCatalogModal && renderCatalogModal()}
 
-      {/* サンプル動画: affiliateUrlで直接FANZAへ遷移するため、iframeモーダルは廃止 */}
+      {/* サンプル動画プレーヤー（MP4直接再生 / iOS Safari対応: playsinline） */}
+      {sampleVideoUrl && (
+        <div
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+          onClick={() => setSampleVideoUrl(null)}
+        >
+          <div
+            className="relative w-full max-w-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <video
+              key={sampleVideoUrl}
+              src={sampleVideoUrl}
+              controls
+              autoPlay
+              playsInline
+              className="w-full max-h-[75vh] rounded-2xl bg-black"
+              style={{ display: 'block' }}
+            />
+            <button
+              onClick={() => setSampleVideoUrl(null)}
+              className="absolute -top-4 -right-4 w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold shadow-xl z-10 text-sm"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <p className="text-center text-white/40 text-xs mt-2">背景をタップして閉じる</p>
+          </div>
+        </div>
+      )}
 
       {/* ライトボックス（モーダル外に配置してモーダルが閉じても表示できる） */}
       {previewFace && (
