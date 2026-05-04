@@ -14,7 +14,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 
 // ─────────────────────────────────────────────
 // 型定義
@@ -70,10 +70,48 @@ export default function MyPage() {
   const [analysis, setAnalysis] = useState<PreferenceAnalysis | null>(null);
   const [analysisLoading, setAnalysisLoading] = useState(false);
 
+  // 退会モーダル
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [deleteInput, setDeleteInput] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const deleteInputRef = useRef<HTMLInputElement>(null);
+
   const handleSignOut = async () => {
     await signOut();
     router.push("/");
   };
+
+  const handleDeleteAccount = async () => {
+    if (!session?.access_token) return;
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch("/api/user/delete", {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok) {
+        const data = await res.json() as { error?: string };
+        throw new Error(data.error ?? "退会処理に失敗しました");
+      }
+      // サインアウトしてトップへ
+      await signOut();
+      router.push("/?deleted=1");
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "退会処理に失敗しました");
+      setDeleting(false);
+    }
+  };
+
+  // モーダルを開くとき入力欄をフォーカス
+  useEffect(() => {
+    if (deleteModalOpen) {
+      setDeleteInput("");
+      setDeleteError(null);
+      setTimeout(() => deleteInputRef.current?.focus(), 100);
+    }
+  }, [deleteModalOpen]);
 
   const loadStats = useCallback(async (token: string) => {
     // スワイプ数
@@ -316,11 +354,81 @@ export default function MyPage() {
                 <p className="text-sm text-foreground/60 leading-relaxed flex-1">
                   アカウントを完全に削除します。この操作は取り消すことができず、AIへの学習データも全て消去されます。
                 </p>
-                <button className="whitespace-nowrap px-6 py-2.5 bg-background border border-red-500/50 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors">
+                <button
+                  onClick={() => setDeleteModalOpen(true)}
+                  className="whitespace-nowrap px-6 py-2.5 bg-background border border-red-500/50 text-red-500 rounded-xl font-bold hover:bg-red-500 hover:text-white transition-colors"
+                >
                   退会手続きへ
                 </button>
               </div>
             </div>
+
+            {/* 退会確認モーダル */}
+            {deleteModalOpen && (
+              <div
+                className="fixed inset-0 z-[900] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                onClick={(e) => { if (e.target === e.currentTarget) setDeleteModalOpen(false); }}
+              >
+                <div className="bg-card border border-border rounded-3xl shadow-2xl w-full max-w-md p-7 space-y-5 animate-in zoom-in-95 duration-200">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-red-500/10 p-2.5 rounded-full flex-shrink-0">
+                      <Shield className="w-5 h-5 text-red-500" />
+                    </div>
+                    <h2 className="text-lg font-extrabold text-red-500">退会手続き</h2>
+                  </div>
+
+                  <div className="bg-red-500/5 border border-red-500/20 rounded-2xl p-4 space-y-1.5 text-sm text-foreground/70 leading-relaxed">
+                    <p>退会すると以下のデータが<strong className="text-red-500">完全かつ永久に削除</strong>されます：</p>
+                    <ul className="list-disc list-inside space-y-0.5 text-xs text-foreground/60 mt-2">
+                      <li>AIスワイプ学習データ（好みの女優情報）</li>
+                      <li>キープ・いいね履歴</li>
+                      <li>アカウント情報</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-foreground/60">
+                      確認のため「<span className="text-red-500 font-extrabold">退会する</span>」と入力してください
+                    </label>
+                    <input
+                      ref={deleteInputRef}
+                      type="text"
+                      value={deleteInput}
+                      onChange={(e) => setDeleteInput(e.target.value)}
+                      placeholder="退会する"
+                      className="w-full bg-background border border-border rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-500/40 focus:border-red-500/60"
+                    />
+                  </div>
+
+                  {deleteError && (
+                    <p className="text-xs text-red-500 bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2">
+                      {deleteError}
+                    </p>
+                  )}
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => setDeleteModalOpen(false)}
+                      disabled={deleting}
+                      className="flex-1 py-2.5 bg-secondary border border-border rounded-xl font-bold text-sm hover:bg-border transition-colors disabled:opacity-50"
+                    >
+                      キャンセル
+                    </button>
+                    <button
+                      onClick={handleDeleteAccount}
+                      disabled={deleteInput !== "退会する" || deleting}
+                      className="flex-1 py-2.5 bg-red-500 text-white rounded-xl font-bold text-sm hover:bg-red-600 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {deleting ? (
+                        <><Loader2 className="w-4 h-4 animate-spin" />処理中…</>
+                      ) : (
+                        "退会する"
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* ログアウト */}
             <div className="mt-8 mb-8 flex justify-center">
