@@ -2017,33 +2017,34 @@ export default function DashboardPage() {
       {/* カタログモーダル */}
       {showCatalogModal && renderCatalogModal()}
 
-      {/* サンプル動画プレーヤー（MP4直接再生 / iOS Safari対応: playsinline） */}
+      {/* サンプル動画プレーヤー（iframeモーダル）*/}
       {sampleVideoUrl && (
         <div
-          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/95 backdrop-blur-sm p-3"
           onClick={() => setSampleVideoUrl(null)}
         >
           <div
             className="relative w-full max-w-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
-            <video
-              key={sampleVideoUrl}
-              src={sampleVideoUrl}
-              controls
-              autoPlay
-              playsInline
-              className="w-full max-h-[75vh] rounded-2xl bg-black"
-              style={{ display: 'block' }}
-            />
+            {/* paddingTop 75% = 4:3比率。16:9(56.25%)よりも縦を確保してコントロールが隠れない */}
+            <div className="relative w-full rounded-2xl overflow-hidden bg-black" style={{ paddingTop: '75%' }}>
+              <iframe
+                key={sampleVideoUrl}
+                src={sampleVideoUrl}
+                className="absolute inset-0 w-full h-full border-0"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+                title="サンプル動画"
+              />
+            </div>
             <button
               onClick={() => setSampleVideoUrl(null)}
-              className="absolute -top-4 -right-4 w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold shadow-xl z-10 text-sm"
+              className="absolute -top-4 -right-4 w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold shadow-xl z-10"
             >
               <X className="w-4 h-4" />
             </button>
-            <p className="text-center text-white/40 text-xs mt-2">背景をタップして閉じる</p>
+            <p className="text-center text-white/40 text-xs mt-3">背景をタップして閉じる</p>
           </div>
         </div>
       )}
