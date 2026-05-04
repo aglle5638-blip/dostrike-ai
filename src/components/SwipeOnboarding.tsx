@@ -107,6 +107,21 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
     return () => window.removeEventListener('keydown', handler);
   }, [decide, phase]);
 
+  // デッキを全枚使い切ったとき（REQUIRED_SWIPES未満でも）自動保存して完了
+  useEffect(() => {
+    if (
+      phase === 'swipe' &&
+      !isLoading &&
+      !isSaving &&
+      deck.length > 0 &&
+      index >= deck.length &&
+      decisions.current.length > 0
+    ) {
+      setIsSaving(true);
+      savePreferences(decisions.current, authToken).then(() => onComplete());
+    }
+  }, [phase, isLoading, isSaving, deck.length, index, authToken, onComplete]);
+
   // ── タッチ/マウス操作 ─────────────────────────────────────────────
   const onTouchStart = (e: React.TouchEvent) => { dragStartX.current = e.touches[0].clientX; setIsDragging(true); };
   const onTouchMove  = (e: React.TouchEvent) => { setDragX(e.touches[0].clientX - dragStartX.current); };
@@ -216,12 +231,26 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
   }
 
   if (!current) {
+    // デッキが空（API失敗）の場合のみエラー表示。カード使い切りは上のuseEffectが処理する
+    if (deck.length === 0) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
+          <p className="text-foreground/60 text-sm">データを読み込めませんでした</p>
+          <button onClick={loadDeck} className="px-6 py-2 bg-primary text-white rounded-full text-sm font-bold">
+            再読み込み
+          </button>
+          <button onClick={onComplete} className="text-xs text-foreground/40 underline font-bold">
+            スキップしてダッシュボードへ
+          </button>
+        </div>
+      );
+    }
+    // カードを全部消化中 → useEffectが保存処理中
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
-        <p className="text-foreground/60 text-sm">データを読み込めませんでした</p>
-        <button onClick={onComplete} className="px-6 py-2 bg-primary text-white rounded-full text-sm font-bold">
-          スキップしてダッシュボードへ
-        </button>
+      <div className="flex flex-col items-center justify-center h-[70vh] gap-4 animate-in fade-in duration-300">
+        <Sparkles className="w-12 h-12 text-primary animate-pulse" />
+        <p className="text-lg font-extrabold">AIが好みを学習しています...</p>
+        <p className="text-sm text-foreground/60">パーソナライズされたレコメンドを準備中です</p>
       </div>
     );
   }

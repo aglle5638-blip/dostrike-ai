@@ -493,7 +493,7 @@ export default function DashboardPage() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${session.access_token}`,
       },
-      body: JSON.stringify({ slotTypeIds: [], sortBy, limit: 18 }),
+      body: JSON.stringify({ slotTypeIds: [], sortBy, limit: 20 }),
     })
       .then(r => r.json())
       .then((data: RecommendResponse) => {
@@ -623,12 +623,17 @@ export default function DashboardPage() {
   const handleDeleteActress = async (actressId: string) => {
     if (!session?.access_token) return;
     // 楽観的UI更新
+    let removed = false;
     setPreferenceAnalysis(prev => {
       if (!prev) return prev;
       const filtered = prev.topActresses.filter(a => a.actress_id !== actressId);
       if (filtered.length === prev.topActresses.length) return prev;
+      removed = true;
       return { ...prev, topActresses: filtered, count: prev.count - 1 };
     });
+    if (removed) {
+      setPreferenceCount(prev => Math.max(0, (prev ?? 1) - 1));
+    }
     // API削除
     try {
       await fetch(`/api/actress/preferences?actress_id=${encodeURIComponent(actressId)}`, {

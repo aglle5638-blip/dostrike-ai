@@ -97,21 +97,26 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── 優先2: FANZA API（複数イニシャルを試みる）────────────────────
+  // ── 優先2: FANZA API ─────────────────────────────────────────────
   if (affiliateId && apiKey) {
     try {
-      const INITIALS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら'];
-      // フィルターあり: 3イニシャル並列。フィルターなし: 1イニシャル
-      const targetInitials = (bodyFilter !== 'all' || ageFilter !== 'all')
-        ? shuffle(INITIALS).slice(0, 3)
-        : [INITIALS[Math.floor(Math.random() * INITIALS.length)]];
+      const ALL_INITIALS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら'];
+      // フィルターあり: 全9イニシャル並列（多数取得してフィルター後に十分な枚数を確保）
+      // フィルターなし: ランダム1イニシャル
+      const hasFilter = bodyFilter !== 'all' || ageFilter !== 'all';
+      const targetInitials = hasFilter ? ALL_INITIALS : [ALL_INITIALS[Math.floor(Math.random() * ALL_INITIALS.length)]];
 
-      const fetchActressesByInitial = async (initial: string) => {
-        const hitsCount = (bodyFilter !== 'all' || ageFilter !== 'all') ? '50' : '30';
+      type RawActress = {
+        id: string; name: string;
+        imageURL?: { large?: string; small?: string };
+        bust?: string; height?: string; birthday?: string;
+      };
+
+      const fetchActressesByInitial = async (initial: string): Promise<RawActress[]> => {
         const params = new URLSearchParams({
           site:         'FANZA',
           initial,
-          hits:         hitsCount,
+          hits:         '50',
           offset:       '1',
           affiliate_id: affiliateId,
           api_id:       apiKey,
@@ -120,21 +125,11 @@ export async function GET(req: NextRequest) {
         const res = await fetch(`https://api.dmm.com/affiliate/v3/ActressSearch?${params}`, { cache: 'no-store' });
         if (!res.ok) return [];
         const data = await res.json() as {
-          result: {
-            status: string | number;
-            actress?: Array<{
-              id: string; name: string;
-              imageURL?: { large?: string; small?: string };
-              bust?: string; height?: string; birthday?: string;
-            }>;
-          };
+          result: { status: string | number; actress?: RawActress[] };
         };
         if (String(data.result.status) !== '200') return [];
         return (data.result.actress ?? []).filter(a => a.imageURL?.large || a.imageURL?.small);
       };
-
-      // タグ生成 + マッピング
-      type RawActress = { id: string; name: string; imageURL?: { large?: string; small?: string }; bust?: string; height?: string; birthday?: string };
 
       const allResults = await Promise.allSettled(targetInitials.map(fetchActressesByInitial));
       const rawActresses: RawActress[] = allResults
@@ -149,13 +144,16 @@ export async function GET(req: NextRequest) {
         return true;
       });
 
-      let actresses: (SwipeDeckActress & { _bust: number | null; _ageGroup: string | null })[] = unique.map((a: RawActress) => {
+      console.log(`[swipe-deck] FANZA API: ${unique.length} unique actresses from ${targetInitials.length} initials`);
+
+      // タグ付け
+      const toActress = (a: RawActress): SwipeDeckActress & { _bust: number | null; _ageGroup: string | null } => {
         const tags: string[] = [];
-        if (a.bust) {
-          const b = parseInt(a.bust);
-          if (b >= 90)      tags.push('グラマー');
-          else if (b <= 78) tags.push('スレンダー');
-          else              tags.push('普通');
+        const bustNum = a.bust ? parseInt(a.bust) : null;
+        if (bustNum !== null) {
+          if (bustNum >= 90)      tags.push('グラマー');
+          else if (bustNum <= 78) tags.push('スレンダー');
+          else                    tags.push('普通');
         }
         if (a.height) {
           const h = parseInt(a.height);
@@ -165,79 +163,47 @@ export async function GET(req: NextRequest) {
         const ageGroup = getAgeGroup(a.birthday);
         if (ageGroup) tags.push(ageGroup);
         if (!tags.some(t => ['グラマー','スレンダー','普通'].includes(t))) tags.push('清楚系');
-
         return {
-          id:       a.id,
-          name:     a.name,
+          id: a.id, name: a.name,
           imageUrl: a.imageURL!.large ?? a.imageURL!.small!,
-          tags,
-          _bust:     a.bust ? parseInt(a.bust) : null,
-          _ageGroup: ageGroup,
+          tags, _bust: bustNum, _ageGroup: ageGroup,
         };
-      });
+      };
 
-      // サーバーサイドフィルタリング
-      if (bodyFilter !== 'all') {
-        actresses = actresses.filter(a => {
-          if (!a._bust) return bodyFilter === '普通';
-          if (bodyFilter === 'グラマー')   return a._bust >= 90;
-          if (bodyFilter === 'スレンダー') return a._bust <= 78;
-          return a._bust > 78 && a._bust < 90;
-        });
-      }
-      if (ageFilter !== 'all') {
-        actresses = actresses.filter(a => a._ageGroup === ageFilter);
-      }
+      const allTagged = unique.map(toActress);
 
-      const result: SwipeDeckActress[] = shuffle(actresses)
+      // bodyフィルタリング
+      const bodyMatch = (a: { _bust: number | null }) => {
+        if (!a._bust) return bodyFilter === '普通' || bodyFilter === 'all';
+        if (bodyFilter === 'グラマー')   return a._bust >= 90;
+        if (bodyFilter === 'スレンダー') return a._bust <= 78;
+        if (bodyFilter === '普通')       return a._bust > 78 && a._bust < 90;
+        return true;
+      };
+
+      // ageフィルタリング
+      const ageMatch = (a: { _ageGroup: string | null }) =>
+        ageFilter === 'all' || a._ageGroup === ageFilter;
+
+      // フィルター適用（段階的に緩和）
+      const strictFiltered = allTagged.filter(a => bodyMatch(a) && ageMatch(a));
+      const bodyOnlyFiltered = bodyFilter !== 'all' ? allTagged.filter(a => bodyMatch(a)) : allTagged;
+
+      // 最終的に使う結果: 両方一致 → body一致のみ（age緩和） → 全員（体型も緩和）
+      const candidates = strictFiltered.length >= 5
+        ? strictFiltered
+        : bodyOnlyFiltered.length >= 5
+          ? bodyOnlyFiltered
+          : allTagged;
+
+      const result: SwipeDeckActress[] = shuffle(candidates)
         .map(({ id, name, imageUrl, tags }) => ({ id, name, imageUrl, tags }))
         .slice(0, 20);
 
-      console.log(`[swipe-deck] FANZA API: ${result.length} after filter (body=${bodyFilter} age=${ageFilter})`);
+      console.log(`[swipe-deck] strict=${strictFiltered.length} bodyOnly=${bodyOnlyFiltered.length} final=${result.length}`);
 
-      if (result.length >= 5) {
+      if (result.length >= 3) {
         return NextResponse.json({ actresses: result, source: 'fanza' });
-      }
-
-      // フィルターを緩めてリトライ（bodyとageの両方指定の場合）
-      if (bodyFilter !== 'all' && ageFilter !== 'all' && result.length < 5) {
-        console.log('[swipe-deck] strict filter yielded <5, retrying without age filter');
-        // age フィルターを外して再試行
-        const relaxedActresses = shuffle(
-          unique.map((a: RawActress) => {
-            const tags: string[] = [];
-            if (a.bust) {
-              const b = parseInt(a.bust);
-              if (b >= 90)      tags.push('グラマー');
-              else if (b <= 78) tags.push('スレンダー');
-              else              tags.push('普通');
-            }
-            if (a.height) {
-              const h = parseInt(a.height);
-              if (h >= 165)      tags.push('高身長');
-              else if (h <= 153) tags.push('小柄');
-            }
-            const ageGroup = getAgeGroup(a.birthday);
-            if (ageGroup) tags.push(ageGroup);
-            if (!tags.some(t => ['グラマー','スレンダー','普通'].includes(t))) tags.push('清楚系');
-            return {
-              id:    a.id,
-              name:  a.name,
-              imageUrl: a.imageURL!.large ?? a.imageURL!.small!,
-              tags,
-              _bust: a.bust ? parseInt(a.bust) : null,
-            };
-          }).filter(a => {
-            if (!a._bust) return bodyFilter === '普通';
-            if (bodyFilter === 'グラマー')   return a._bust >= 90;
-            if (bodyFilter === 'スレンダー') return a._bust <= 78;
-            return a._bust > 78 && a._bust < 90;
-          })
-        ).slice(0, 20).map(({ id, name, imageUrl, tags }) => ({ id, name, imageUrl, tags }));
-
-        if (relaxedActresses.length >= 5) {
-          return NextResponse.json({ actresses: relaxedActresses, source: 'fanza' });
-        }
       }
     } catch (err) {
       console.error('[swipe-deck] FANZA API failed:', String(err));
