@@ -197,6 +197,7 @@ export default function DashboardPage() {
     count: number;
     topActresses: { actress_id: string; actress_name: string; image_url: string | null; tags: string[]; score: number }[];
     analysisText: string;
+    characteristics: string[];
   };
   const [preferenceAnalysis, setPreferenceAnalysis] = useState<PreferenceAnalysis | null>(null);
   // パーソナライズ動画（Route 0: user_actress_preferences）
@@ -440,10 +441,10 @@ export default function DashboardPage() {
       headers: { 'Authorization': `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then((d: { count: number; topActresses: PreferenceAnalysis['topActresses']; analysisText: string }) => {
+      .then((d: { count: number; topActresses: PreferenceAnalysis['topActresses']; analysisText: string; characteristics: string[] }) => {
         setHasCheckedPreferences(true);
         setPreferenceCount(d.count);
-        setPreferenceAnalysis({ count: d.count, topActresses: d.topActresses ?? [], analysisText: d.analysisText ?? '' });
+        setPreferenceAnalysis({ count: d.count, topActresses: d.topActresses ?? [], analysisText: d.analysisText ?? '', characteristics: d.characteristics ?? [] });
         if (d.count === 0) setShowSwipeOnboarding(true);
       })
       .catch(() => { setHasCheckedPreferences(true); setPreferenceCount(0); });
@@ -617,6 +618,24 @@ export default function DashboardPage() {
           return next;
        });
     }
+  };
+
+  const handleDeleteActress = async (actressId: string) => {
+    if (!session?.access_token) return;
+    // 楽観的UI更新
+    setPreferenceAnalysis(prev => {
+      if (!prev) return prev;
+      const filtered = prev.topActresses.filter(a => a.actress_id !== actressId);
+      if (filtered.length === prev.topActresses.length) return prev;
+      return { ...prev, topActresses: filtered, count: prev.count - 1 };
+    });
+    // API削除
+    try {
+      await fetch(`/api/actress/preferences?actress_id=${encodeURIComponent(actressId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+    } catch { /* サイレント */ }
   };
 
   // 保存リスト画面専用：Undoトースト付きの解除ハンドラ
@@ -819,12 +838,24 @@ export default function DashboardPage() {
           ) : (
             /* 好み設定済み：分析カード */
             <div className="flex flex-col gap-3">
-              {/* 分析テキスト */}
-              {preferenceAnalysis?.analysisText && (
-                <div className="bg-primary/5 border border-primary/15 rounded-xl px-4 py-3">
-                  <p className="text-xs md:text-sm font-bold text-foreground/80 leading-relaxed">
-                    🤖 {preferenceAnalysis.analysisText}
-                  </p>
+              {/* AI分析テキスト + 5つの特徴 */}
+              {(preferenceAnalysis?.analysisText || (preferenceAnalysis?.characteristics?.length ?? 0) > 0) && (
+                <div className="bg-primary/5 border border-primary/15 rounded-xl px-4 py-3 space-y-2">
+                  {preferenceAnalysis?.analysisText && (
+                    <p className="text-xs md:text-sm font-bold text-foreground/80 leading-relaxed">
+                      🤖 {preferenceAnalysis.analysisText}
+                    </p>
+                  )}
+                  {(preferenceAnalysis?.characteristics?.length ?? 0) > 0 && (
+                    <ul className="space-y-1 mt-1">
+                      {preferenceAnalysis!.characteristics.map((c, i) => (
+                        <li key={i} className="text-[10px] md:text-xs text-foreground/70 leading-relaxed flex gap-1.5">
+                          <span className="text-primary flex-shrink-0">•</span>
+                          <span>{c}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -836,36 +867,29 @@ export default function DashboardPage() {
                     {preferenceAnalysis.topActresses.slice(0, 6).map(a => {
                       const fanzaUrl = `https://al.dmm.co.jp/?lurl=${encodeURIComponent(`https://www.dmm.co.jp/digital/videoa/-/list/=/article=actress/id=${a.actress_id}/`)}&af_id=dostrikeai-990&ch=actress_pref`;
                       return (
-                        <a
-                          key={a.actress_id}
-                          href={fanzaUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group flex flex-col items-center gap-1.5 w-[4rem] md:w-[4.5rem]"
-                        >
-                          {/* 丸アイコン */}
-                          <div className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden border-2 border-border/60 group-hover:border-primary transition-all shadow-md relative flex-shrink-0">
-                            {a.image_url ? (
-                              /* eslint-disable-next-line @next/next/no-img-element */
-                              <img
-                                src={a.image_url}
-                                alt={a.actress_name}
-                                className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                                <span className="text-lg font-extrabold text-primary/50">
-                                  {a.actress_name.charAt(0)}
-                                </span>
-                              </div>
-                            )}
-                            {/* ホバーオーバーレイ */}
-                            <div className="absolute inset-0 rounded-full bg-black/0 group-hover:bg-black/25 transition-colors duration-300 flex items-center justify-center">
-                              <span className="opacity-0 group-hover:opacity-100 text-white text-[9px] font-bold transition-opacity duration-200">→</span>
+                        <div key={a.actress_id} className="relative flex flex-col items-center gap-1.5 w-[4rem] md:w-[4.5rem]">
+                          <a href={fanzaUrl} target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-1.5 w-full">
+                            <div className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden border-2 border-border/60 group-hover:border-primary transition-all shadow-md relative flex-shrink-0">
+                              {a.image_url ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={a.image_url} alt={a.actress_name} className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                                  <span className="text-lg font-extrabold text-primary/50">{a.actress_name.charAt(0)}</span>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                          <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2 w-full">{a.actress_name}</span>
-                        </a>
+                            <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2 w-full">{a.actress_name}</span>
+                          </a>
+                          {/* 削除ボタン */}
+                          <button
+                            onClick={() => handleDeleteActress(a.actress_id)}
+                            className="absolute -top-0.5 -right-0.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-md z-10"
+                            aria-label="好みから削除"
+                          >
+                            <X className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                          </button>
+                        </div>
                       );
                     })}
                   </div>
@@ -902,7 +926,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="relative z-10 min-h-[500px]">
-            {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /><span className="text-base md:text-xl">⚡ リアルタイムAIマッチ</span></>)}
+            {renderPersonalFeedHeader()}
 
             {/* ローディングスケルトン */}
             {isLoadingPersonalVideos && (
@@ -925,177 +949,203 @@ export default function DashboardPage() {
             )}
 
             {/* 動画グリッド */}
-            {!isLoadingPersonalVideos && personalVideos.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
-                {personalVideos.map((video) => {
-                  const fb = feedback[video.id];
-                  if (fb === 'change') {
-                    return (
-                      <div key={video.id} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
-                        <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
-                        <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={video.id} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
-                      <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
-                        <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={video.thumbnailUrl} alt={video.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                          <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
-                            <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
-                              <Sparkles className="w-3 h-3 text-primary mr-1" />
-                              <span className="text-white font-extrabold text-[10px] tracking-wide">{video.matchScore}%</span>
+            {!isLoadingPersonalVideos && personalVideos.length > 0 && (() => {
+              // PR動画をレコメンドにちりばめる（4動画ごとに1PR）
+              type MergedItem = { type: 'video'; video: VideoResult } | { type: 'pr'; video: VideoResult; idx: number };
+              const merged: MergedItem[] = [];
+              let prIdx = 0;
+              personalVideos.forEach((video, i) => {
+                merged.push({ type: 'video', video });
+                // 4動画ごとにPRを挟む (index 3, 8, 13...)
+                if ((i + 1) % 4 === 0 && prIdx < adVideos.length) {
+                  merged.push({ type: 'pr', video: adVideos[prIdx], idx: prIdx });
+                  prIdx++;
+                }
+              });
+              return (
+                <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-2 md:gap-5 mt-4">
+                  {merged.map((item) => {
+                    if (item.type === 'video') {
+                      const video = item.video;
+                      const fb = feedback[video.id];
+                      if (fb === 'change') {
+                        return (
+                          <div key={video.id} className="aspect-video bg-secondary/50 rounded-2xl flex flex-col items-center justify-center border-2 border-dashed border-border/60 p-4 text-center animate-in zoom-in-95 duration-300">
+                            <Loader2 className="w-8 h-8 text-primary animate-spin mb-2" />
+                            <p className="text-foreground/70 text-xs font-bold">AIが除外・再学習しました</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={video.id} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                          <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : ''}`}>
+                            <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={video.thumbnailUrl} alt={video.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                              <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
+                                <div className="bg-black/85 backdrop-blur-sm px-2 py-0.5 rounded-lg flex items-center shadow-lg border border-white/10">
+                                  <Sparkles className="w-3 h-3 text-primary mr-1" />
+                                  <span className="text-white font-extrabold text-[10px] tracking-wide">{video.matchScore}%</span>
+                                </div>
+                                {video.source === 'mock' && (
+                                  <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
+                                )}
+                                {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
+                                {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
+                              </div>
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                                  className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
+                                >
+                                  <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
+                                </button>
+                                <a
+                                  href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
+                                </a>
+                              </div>
                             </div>
-                            {video.source === 'mock' && (
-                              <div className="bg-black/60 text-white/60 px-1.5 py-0.5 rounded-lg font-bold text-[9px] border border-white/10">DEMO</div>
-                            )}
-                            {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
-                            {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
-                          </div>
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
-                              className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
-                            >
-                              <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                            </button>
-                            <a
-                              href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
-                            </a>
-                          </div>
-                        </div>
-                        <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
-                            className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
-                          >
-                            <Play className="w-3 h-3 fill-current" /> サンプル再生
-                          </button>
-                          <a
-                            href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <MessageSquare className="w-3 h-3" /> レビューを見る
-                          </a>
-                        </div>
-                        <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
-                          <div className="h-[2.8rem] overflow-hidden">
-                            <a
-                              href={video.affiliateUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed hover:text-primary transition-colors"
-                            >
-                              {video.title}
-                            </a>
-                          </div>
-                          <div className="flex items-center justify-between gap-1 min-w-0">
-                            {video.actress && (
-                              <div className="text-[10px] text-foreground/50 truncate flex-1">{video.actress}</div>
-                            )}
-                            {video.reviewAverage != null && (
-                              <div className="flex items-center gap-0.5 flex-shrink-0">
-                                <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                                <span className="text-[10px] font-bold text-foreground/70">{video.reviewAverage.toFixed(1)}</span>
-                                {video.reviewCount != null && (
-                                  <span className="text-[9px] text-foreground/40">({video.reviewCount.toLocaleString()})</span>
+                            <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                                className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
+                              >
+                                <Play className="w-3 h-3 fill-current" /> サンプル再生
+                              </button>
+                              <a
+                                href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <MessageSquare className="w-3 h-3" /> レビューを見る
+                              </a>
+                            </div>
+                            <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                              <div className="h-[2.8rem] overflow-hidden">
+                                <a
+                                  href={video.affiliateUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed hover:text-primary transition-colors"
+                                >
+                                  {video.title}
+                                </a>
+                              </div>
+                              <div className="flex items-center justify-between gap-1 min-w-0">
+                                {video.actress && (
+                                  <div className="text-[10px] text-foreground/50 truncate flex-1">{video.actress}</div>
+                                )}
+                                {video.reviewAverage != null && (
+                                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                                    <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                    <span className="text-[10px] font-bold text-foreground/70">{video.reviewAverage.toFixed(1)}</span>
+                                    {video.reviewCount != null && (
+                                      <span className="text-[9px] text-foreground/40">({video.reviewCount.toLocaleString()})</span>
+                                    )}
+                                  </div>
                                 )}
                               </div>
-                            )}
-                          </div>
-                          {(() => {
-                            const stat = videoStats[video.id];
-                            if (!stat || stat.total === 0) return null;
-                            const pct = Math.round((stat.strikeCount / stat.total) * 100);
-                            return (
-                              <div className="flex items-center gap-1 mt-0.5">
-                                <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
-                                <span className="text-[9px] text-foreground/40 font-bold">
-                                  {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
-                                </span>
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                      <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
-                        <button onClick={() => handleFeedback(video.id, 'change', video)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
-                          <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
-                        </button>
-                        <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
-                          <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
-                          <span>キープ</span>
-                        </button>
-                        <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
-                          <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
-                          <span>いいね</span>
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-                {/* 広告スロット×2（グリッドの最後に配置） */}
-                {adVideos.slice(0, 2).map((adVideo, adIdx) => (
-                  <a
-                    key={`ad-${adVideo.id}-${adIdx}`}
-                    href={adVideo.affiliateUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none group"
-                  >
-                    <div className="relative bg-card border border-primary/25 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl hover:border-primary/60 transition-all duration-300">
-                      <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-                        <div className="absolute top-2 left-2 flex gap-1.5">
-                          <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-extrabold text-[10px] tracking-wide shadow-lg">PR</div>
-                        </div>
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                          <span className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-5 rounded-full text-[10px] font-extrabold shadow-lg">
-                            FANZAで見る →
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                        <span className="flex flex-1 items-center justify-center gap-1 bg-primary text-white py-1.5 rounded-lg text-[10px] font-bold">
-                          FANZAで見る →
-                        </span>
-                      </div>
-                      <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
-                        <div className="h-[2.8rem] overflow-hidden">
-                          <p className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed">{adVideo.title}</p>
-                        </div>
-                        <div className="flex items-center justify-between gap-1 min-w-0">
-                          {adVideo.actress && <div className="text-[10px] text-foreground/50 truncate flex-1">{adVideo.actress}</div>}
-                          {adVideo.reviewAverage != null && (
-                            <div className="flex items-center gap-0.5 flex-shrink-0">
-                              <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
-                              <span className="text-[10px] font-bold text-foreground/70">{adVideo.reviewAverage.toFixed(1)}</span>
+                              {(() => {
+                                const stat = videoStats[video.id];
+                                if (!stat || stat.total === 0) return null;
+                                const pct = Math.round((stat.strikeCount / stat.total) * 100);
+                                return (
+                                  <div className="flex items-center gap-1 mt-0.5">
+                                    <Users className="w-2.5 h-2.5 text-foreground/30 flex-shrink-0" />
+                                    <span className="text-[9px] text-foreground/40 font-bold">
+                                      {stat.total}人中 <span className="text-primary">{pct}%</span>がいいね
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
-                          )}
+                          </div>
+                          <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
+                            <button onClick={() => handleFeedback(video.id, 'change', video)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
+                              <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
+                            </button>
+                            <button onClick={() => handleFeedback(video.id, fb === 'keep' ? '' : 'keep', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
+                              <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
+                              <span>キープ</span>
+                            </button>
+                            <button onClick={() => handleFeedback(video.id, fb === 'strike' ? '' : 'strike', video)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
+                              <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
+                              <span>いいね</span>
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    </div>
-                    <div className="flex">
-                      <span className="flex flex-1 items-center justify-center gap-1.5 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] bg-primary/10 text-primary border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all">
-                        FANZAで今すぐ見る →
-                      </span>
-                    </div>
-                  </a>
-                ))}
-              </div>
-            )}
+                      );
+                    } else {
+                      // PR動画 - 通常動画と同じ見た目 + PRバッジ + 通常ボタン
+                      const adVideo = item.video;
+                      const fb = feedback[adVideo.id];
+                      return (
+                        <div key={`pr-${item.idx}`} className="flex flex-col gap-1.5 md:gap-2 pb-5 md:pb-6 border-b border-border/20 md:border-none">
+                          <div className={`group relative bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300 ${fb === 'keep' ? 'border-yellow-400/70' : fb === 'strike' ? 'border-primary/70' : 'border-primary/25'}`}>
+                            <div className="aspect-video bg-gradient-to-br from-secondary to-background relative overflow-hidden">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+                              <div className="absolute top-2 left-2 flex gap-1.5 flex-wrap w-[90%]">
+                                <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-extrabold text-[10px] tracking-wide shadow-lg">PR</div>
+                                {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/>キープ中</div>}
+                                {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/>いいね</div>}
+                              </div>
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                                <a href={adVideo.affiliateUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap">
+                                  <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> FANZAで見る
+                                </a>
+                              </div>
+                            </div>
+                            <div className="flex gap-2 px-2 py-1.5 md:hidden">
+                              <a href={adVideo.affiliateUrl} target="_blank" rel="noopener noreferrer" className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold">
+                                <Play className="w-3 h-3 fill-current" /> FANZAで見る
+                              </a>
+                            </div>
+                            <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
+                              <div className="h-[2.8rem] overflow-hidden">
+                                <a href={adVideo.affiliateUrl} target="_blank" rel="noopener noreferrer" className="font-bold text-[11px] md:text-sm text-foreground/90 line-clamp-2 leading-relaxed hover:text-primary transition-colors">
+                                  {adVideo.title}
+                                </a>
+                              </div>
+                              <div className="flex items-center justify-between gap-1 min-w-0">
+                                {adVideo.actress && <div className="text-[10px] text-foreground/50 truncate flex-1">{adVideo.actress}</div>}
+                                {adVideo.reviewAverage != null && (
+                                  <div className="flex items-center gap-0.5 flex-shrink-0">
+                                    <Star className="w-2.5 h-2.5 text-yellow-400 fill-yellow-400" />
+                                    <span className="text-[10px] font-bold text-foreground/70">{adVideo.reviewAverage.toFixed(1)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-1 md:gap-2 justify-between items-center w-full px-0.5">
+                            <button onClick={() => handleFeedback(adVideo.id, 'change', adVideo)} className={`flex flex-shrink-0 items-center justify-center w-8 h-8 md:w-10 md:h-10 rounded-full transition-all ${fb==='change' ? 'bg-red-500 text-white' : 'bg-secondary border border-border text-foreground/70 hover:bg-red-500 hover:text-white hover:border-red-500'}`}>
+                              <ThumbsDown className="w-3 h-3 md:w-4 md:h-4" />
+                            </button>
+                            <button onClick={() => handleFeedback(adVideo.id, fb === 'keep' ? '' : 'keep', adVideo)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 py-2 md:py-2.5 px-2 md:px-4 rounded-full font-bold text-[9px] md:text-[10px] transition-all ${fb === 'keep' ? 'bg-yellow-400 text-black' : 'bg-secondary border border-border text-foreground/70 hover:bg-yellow-400 hover:border-yellow-400 hover:text-black'}`}>
+                              <Heart className={`w-3 h-3 md:w-3 md:h-3 flex-shrink-0 ${fb === 'keep' ? 'fill-current' : ''}`} />
+                              <span>キープ</span>
+                            </button>
+                            <button onClick={() => handleFeedback(adVideo.id, fb === 'strike' ? '' : 'strike', adVideo)} className={`whitespace-nowrap flex flex-1 items-center justify-center gap-1 md:gap-1.5 px-2 md:px-4 py-2 md:py-2.5 rounded-full font-bold text-[9px] md:text-[10px] transition-all shadow-sm ${fb==='strike' ? 'bg-primary text-white' : 'bg-primary/5 text-primary border border-primary/20 hover:bg-primary hover:text-white'}`}>
+                              <ThumbsUp className="w-3 h-3 md:w-3 md:h-3 flex-shrink-0" />
+                              <span>いいね</span>
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    }
+                  })}
+                </div>
+              );
+            })()}
 
             {/* 動画なし（フォールバック） */}
             {!isLoadingPersonalVideos && personalVideos.length === 0 && (
@@ -1119,6 +1169,23 @@ export default function DashboardPage() {
       <h3 className="text-sm sm:text-base md:text-xl font-extrabold flex items-center text-foreground truncate max-w-[65%]">
         {title}
       </h3>
+      <div className="flex-shrink-0 relative z-50">
+        {renderSortDropdown()}
+      </div>
+    </div>
+  );
+
+  const renderPersonalFeedHeader = () => (
+    <div className="flex flex-row items-center justify-between gap-2 md:gap-4 pb-2 md:pb-3 border-b border-border/50 relative z-30 mb-4">
+      <div className="flex-1 min-w-0">
+        <h3 className="text-sm sm:text-base md:text-xl font-extrabold flex items-center text-foreground">
+          <Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" />
+          ⚡ リアルタイムAIマッチ
+        </h3>
+        <p className="text-[10px] md:text-xs text-foreground/50 mt-0.5 ml-7 font-medium">
+          あなたの好みに近い女優を提案します
+        </p>
+      </div>
       <div className="flex-shrink-0 relative z-50">
         {renderSortDropdown()}
       </div>

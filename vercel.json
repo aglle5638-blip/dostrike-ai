@@ -23,6 +23,10 @@
     {
       "path": "/api/cron/engagement-sync",
       "schedule": "0 1 * * *"
+    },
+    {
+      "path": "/api/cron/actress-sync",
+      "schedule": "0 16 * * 0"
     }
   ]
 }

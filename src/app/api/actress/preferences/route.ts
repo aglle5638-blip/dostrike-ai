@@ -78,3 +78,38 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const token = authHeader.slice(7);
+    const { searchParams } = new URL(req.url);
+    const actressId = searchParams.get('actress_id');
+    if (!actressId) {
+      return NextResponse.json({ error: 'actress_id is required' }, { status: 400 });
+    }
+
+    const authedClient = createAuthedClient(token);
+    if (!authedClient) return NextResponse.json({ error: 'Supabase unavailable' }, { status: 503 });
+    const { data: { user } } = await authedClient.auth.getUser();
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { createServiceClient } = await import('@/lib/supabase/server');
+    const serviceClient = createServiceClient();
+    if (!serviceClient) return NextResponse.json({ error: 'Supabase unavailable' }, { status: 503 });
+
+    await serviceClient
+      .from('user_actress_preferences')
+      .delete()
+      .eq('user_id', user.id)
+      .eq('actress_id', actressId);
+
+    return NextResponse.json({ success: true });
+  } catch (err) {
+    console.error('[/api/actress/preferences DELETE] Error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
