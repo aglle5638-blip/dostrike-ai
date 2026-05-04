@@ -6,7 +6,7 @@
  *
  * Request:
  *   Authorization: Bearer <token>
- *   { likes: { actress_id: string; actress_name: string }[] }
+ *   { likes: { actress_id: string; actress_name: string; image_url?: string; tags?: string[] }[] }
  *
  * Response:
  *   { success: boolean; saved: number }
@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
     const token = authHeader.slice(7);
 
     const body = await req.json() as {
-      likes: { actress_id: string; actress_name: string }[];
+      likes: { actress_id: string; actress_name: string; image_url?: string; tags?: string[] }[];
     };
 
     if (!Array.isArray(body.likes) || body.likes.length === 0) {
@@ -41,40 +41,38 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // 既存スコアと合算してupsert（スワイプ初回は score=3 で強めの初期値）
-    const rows = body.likes.map(l => ({
-      user_id:      user.id,
-      actress_id:   l.actress_id,
-      actress_name: l.actress_name,
-      score:        3,
-    }));
-
-    // onConflict で score を加算
     const { createServiceClient } = await import('@/lib/supabase/server');
     const serviceClient = createServiceClient();
     if (!serviceClient) {
       return NextResponse.json({ error: 'Supabase unavailable' }, { status: 503 });
     }
 
-    for (const row of rows) {
+    // 既存スコアと合算してupsert（スワイプ初回は score=3 で強めの初期値）
+    for (const like of body.likes) {
       const { data: existing } = await serviceClient
         .from('user_actress_preferences')
         .select('score')
-        .eq('user_id', row.user_id)
-        .eq('actress_id', row.actress_id)
+        .eq('user_id', user.id)
+        .eq('actress_id', like.actress_id)
         .single();
+
+      // image_url / tags を含めてupsert（列が存在しない場合は gracefully 無視される）
+      const upsertRow: Record<string, unknown> = {
+        user_id:      user.id,
+        actress_id:   like.actress_id,
+        actress_name: like.actress_name,
+        score:        (existing?.score ?? 0) + 3,
+        last_seen_at: new Date().toISOString(),
+      };
+      if (like.image_url) upsertRow.image_url = like.image_url;
+      if (like.tags)      upsertRow.tags      = like.tags;
 
       await serviceClient
         .from('user_actress_preferences')
-        .upsert({
-          user_id:      row.user_id,
-          actress_id:   row.actress_id,
-          actress_name: row.actress_name,
-          score:        (existing?.score ?? 0) + row.score,
-        });
+        .upsert(upsertRow);
     }
 
-    return NextResponse.json({ success: true, saved: rows.length });
+    return NextResponse.json({ success: true, saved: body.likes.length });
   } catch (err) {
     console.error('[/api/actress/preferences] Error:', err);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });

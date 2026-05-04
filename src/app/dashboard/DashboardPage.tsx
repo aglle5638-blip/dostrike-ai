@@ -192,6 +192,13 @@ export default function DashboardPage() {
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
   // スワイプ済み女優数（null = 未取得）
   const [preferenceCount, setPreferenceCount] = useState<number | null>(null);
+  // 好み分析結果
+  type PreferenceAnalysis = {
+    count: number;
+    topActresses: { actress_id: string; actress_name: string; image_url: string | null; tags: string[]; score: number }[];
+    analysisText: string;
+  };
+  const [preferenceAnalysis, setPreferenceAnalysis] = useState<PreferenceAnalysis | null>(null);
   // パーソナライズ動画（Route 0: user_actress_preferences）
   const [personalVideos, setPersonalVideos] = useState<VideoResult[]>([]);
   const [isLoadingPersonalVideos, setIsLoadingPersonalVideos] = useState(false);
@@ -419,23 +426,24 @@ export default function DashboardPage() {
     }
   }, [session?.access_token, loadFeedbackFromDB, loadSlotsFromDB]);
 
-  // ── スワイプオンボーディング：好みの未設定チェック ───────────────
+  // ── 好み分析データ取得（count + topActresses + analysisText）────────
   useEffect(() => {
     if (isAuthLoading || hasCheckedPreferences) return;
     if (!session?.access_token) {
-      // 未ログインはスキップ
       setHasCheckedPreferences(true);
+      setPreferenceCount(0);
       return;
     }
-    // ログイン済み：user_actress_preferences が0件ならオンボーディング表示
-    fetch('/api/actress/preferences/count', {
-      headers: { 'Authorization': `Bearer ${session.access_token}` },
+    const token = session.access_token;
+    // analysis エンドポイントで count・好み女優・分析文を一括取得
+    fetch('/api/actress/preferences/analysis', {
+      headers: { 'Authorization': `Bearer ${token}` },
     })
       .then(r => r.json())
-      .then((d: { count: number }) => {
+      .then((d: { count: number; topActresses: PreferenceAnalysis['topActresses']; analysisText: string }) => {
         setHasCheckedPreferences(true);
         setPreferenceCount(d.count);
-        // 好みが未登録の場合のみオンボーディング表示
+        setPreferenceAnalysis({ count: d.count, topActresses: d.topActresses ?? [], analysisText: d.analysisText ?? '' });
         if (d.count === 0) setShowSwipeOnboarding(true);
       })
       .catch(() => { setHasCheckedPreferences(true); setPreferenceCount(0); });
@@ -471,11 +479,11 @@ export default function DashboardPage() {
     if (viewMode.type === 'trend') setTrendPage(0);
   }, [viewMode]);
 
-  // ── ドストライク選抜：Route 0（user_actress_preferences）からパーソナライズ動画取得 ──
+  // ── ドストライク選抜：Route 0 からパーソナライズ動画をリアルタイム取得 ──
+  // preferenceCount を待たず即時フェッチ（認証済みならRoute 0が動く）
   useEffect(() => {
     if (viewMode.type !== 'personal') return;
     if (!session?.access_token) return;
-    if (preferenceCount === null || preferenceCount === 0) return;
     let cancelled = false;
     setIsLoadingPersonalVideos(true);
     fetch('/api/videos/recommend', {
@@ -496,7 +504,7 @@ export default function DashboardPage() {
       .catch(() => { if (!cancelled) setIsLoadingPersonalVideos(false); });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewMode.type, session?.access_token, sortBy, preferenceCount, personalRefreshKey]);
+  }, [viewMode.type, session?.access_token, sortBy, personalRefreshKey]);
 
   useEffect(() => {
     if (viewMode.type !== 'trend') return;
@@ -809,21 +817,61 @@ export default function DashboardPage() {
               </button>
             </div>
           ) : (
-            /* 好み設定済み */
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                <Sparkles className="w-5 h-5 text-primary" />
+            /* 好み設定済み：分析カード */
+            <div className="flex flex-col gap-3">
+              {/* 分析テキスト */}
+              {preferenceAnalysis?.analysisText && (
+                <div className="bg-primary/5 border border-primary/15 rounded-xl px-4 py-3">
+                  <p className="text-xs md:text-sm font-bold text-foreground/80 leading-relaxed">
+                    🤖 {preferenceAnalysis.analysisText}
+                  </p>
+                </div>
+              )}
+
+              {/* 好み女優グリッド（画像 → FANZAアフィリエイトリンク） */}
+              {preferenceAnalysis && preferenceAnalysis.topActresses.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold text-foreground/40 mb-2">あなたが好きな女優</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {preferenceAnalysis.topActresses.slice(0, 6).map(a => {
+                      const fanzaUrl = `https://al.dmm.co.jp/?lurl=${encodeURIComponent(`https://www.dmm.co.jp/digital/videoa/-/list/=/article=actress/id=${a.actress_id}/`)}&af_id=dostrikeai-990&ch=actress_pref`;
+                      return (
+                        <a
+                          key={a.actress_id}
+                          href={fanzaUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="group flex flex-col items-center gap-1 w-[4.5rem] md:w-20"
+                        >
+                          <div className="w-[4.5rem] h-[4.5rem] md:w-20 md:h-20 rounded-2xl overflow-hidden border-2 border-border/50 group-hover:border-primary transition-all shadow-sm relative">
+                            {a.image_url ? (
+                              /* eslint-disable-next-line @next/next/no-img-element */
+                              <img src={a.image_url} alt={a.actress_name} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300" />
+                            ) : (
+                              <div className="w-full h-full bg-primary/10 flex items-center justify-center">
+                                <Heart className="w-5 h-5 text-primary/40" />
+                              </div>
+                            )}
+                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                          </div>
+                          <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2">{a.actress_name}</span>
+                        </a>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 操作ボタン */}
+              <div className="flex items-center gap-2 mt-1">
+                <button
+                  onClick={() => setShowSwipeOnboarding(true)}
+                  className="text-[10px] font-bold text-primary border border-primary/30 px-3 py-1.5 rounded-full hover:bg-primary/5 transition-colors whitespace-nowrap"
+                >
+                  ＋ 追加スワイプ
+                </button>
+                <span className="text-[10px] text-foreground/30">{preferenceCount}人スワイプ済み</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xs md:text-sm font-extrabold">好みを学習済み</h2>
-                <p className="text-[10px] text-foreground/50">{preferenceCount}人の女優をスワイプ済み · AIが随時更新中</p>
-              </div>
-              <button
-                onClick={() => setShowSwipeOnboarding(true)}
-                className="flex-shrink-0 text-[10px] font-bold text-primary border border-primary/30 px-3 py-1.5 rounded-full hover:bg-primary/5 transition-colors whitespace-nowrap"
-              >
-                再設定
-              </button>
             </div>
           )}
         </div>
@@ -844,23 +892,7 @@ export default function DashboardPage() {
           </div>
         ) : (
           <div className="relative z-10 min-h-[500px]">
-            {/* 日替わりバナー */}
-            <div className="bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 rounded-xl md:rounded-2xl p-3 md:p-4 shadow-sm mb-5 flex flex-row items-center gap-3">
-              <div className="bg-primary p-2 md:p-3 rounded-lg shadow-[0_0_15px_rgba(244,63,94,0.3)] flex-shrink-0 flex flex-col items-center justify-center gap-0.5">
-                <Clock className="w-3.5 h-3.5 md:w-4 md:h-4 text-white" />
-                <span className="text-white font-extrabold text-[8px] md:text-[10px]">日替わり</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-extrabold flex items-center text-foreground mb-0.5 text-xs md:text-sm">
-                  📅 本日のおすすめ
-                </h3>
-                <p className="text-foreground/70 text-[10px] md:text-xs leading-tight font-medium">
-                  AIがあなたの好みを学習し、数万本のデータベースから<strong className="text-primary font-bold">本日最もマッチした作品を厳選して</strong>お届けします。
-                </p>
-              </div>
-            </div>
-
-            {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /><span className="text-base md:text-xl">AIマッチ結果</span></>)}
+            {renderFeedHeader(<><Sparkles className="w-5 h-5 md:w-6 md:h-6 text-primary mr-2 flex-shrink-0" /><span className="text-base md:text-xl">⚡ リアルタイムAIマッチ</span></>)}
 
             {/* ローディングスケルトン */}
             {isLoadingPersonalVideos && (
@@ -1726,8 +1758,9 @@ export default function DashboardPage() {
                   authToken={session?.access_token}
                   onComplete={() => {
                     setShowSwipeOnboarding(false);
-                    // 好み数を再取得してパーソナライズ動画もリフレッシュ
+                    // 好み分析データ再取得 + 動画リフレッシュ
                     setHasCheckedPreferences(false);
+                    setPreferenceAnalysis(null);
                     setPersonalRefreshKey(k => k + 1);
                   }}
                 />

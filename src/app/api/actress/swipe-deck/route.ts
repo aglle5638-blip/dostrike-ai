@@ -2,63 +2,82 @@
  * GET /api/actress/swipe-deck
  *
  * スワイプ好み学習用の女優デッキを返す。
- * FANZA ActressSearch API の人気順で取得し、写真あり女優のみを返す。
+ * FANZA ActressSearch API で取得し、写真あり女優のみを返す。
+ *
+ * Query params:
+ *   body?: 'スレンダー' | '普通' | 'グラマー'  — 体型フィルター
+ *   age?:  '10代' | '20代' | '30代以上'        — 年代フィルター
  *
  * Response:
  *   { actresses: SwipeDeckActress[], source: 'fanza' | 'mock' }
  */
 
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export interface SwipeDeckActress {
   id: string;
   name: string;
   imageUrl: string;        // large サイズ（なければ small）
-  tags: string[];          // 雰囲気タグ（bust/bodyHeight/スリーサイズから生成）
+  tags: string[];          // 雰囲気タグ（bust/height/スリーサイズから生成）
   videoCount?: number;
 }
 
 const MOCK_ACTRESSES: SwipeDeckActress[] = [
-  { id: 'm001', name: '田中 美咲', imageUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=600&fit=crop', tags: ['清楚系', '黒髪'] },
-  { id: 'm002', name: '鈴木 あい', imageUrl: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400&h=600&fit=crop', tags: ['キュート系', '笑顔'] },
-  { id: 'm003', name: '山本 さくら', imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=600&fit=crop', tags: ['お姉さん系', '色気'] },
-  { id: 'm004', name: '佐藤 ゆり', imageUrl: 'https://images.unsplash.com/photo-1488716820095-cbe80883c496?w=400&h=600&fit=crop', tags: ['清楚系', 'ロング'] },
-  { id: 'm005', name: '伊藤 めぐ', imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=600&fit=crop', tags: ['ギャル系', '元気'] },
-  { id: 'm006', name: '渡辺 ひな', imageUrl: 'https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=400&h=600&fit=crop', tags: ['クール系', 'モデル'] },
-  { id: 'm007', name: '中村 りん', imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=600&fit=crop', tags: ['キュート系', '童顔'] },
-  { id: 'm008', name: '小林 まや', imageUrl: 'https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=400&h=600&fit=crop', tags: ['お姉さん系', '人妻'] },
-  { id: 'm009', name: '加藤 しほ', imageUrl: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=400&h=600&fit=crop', tags: ['清楚系', 'ショート'] },
-  { id: 'm010', name: '松本 あんな', imageUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=600&fit=crop', tags: ['ギャル系', '明るい'] },
-  { id: 'm011', name: '井上 なな', imageUrl: 'https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?w=400&h=600&fit=crop', tags: ['クール系', 'ミステリアス'] },
-  { id: 'm012', name: '木村 はるか', imageUrl: 'https://images.unsplash.com/photo-1499952127939-9bbf5af6c51c?w=400&h=600&fit=crop', tags: ['清楚系', '色白'] },
+  { id: 'm001', name: '田中 美咲',  imageUrl: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?w=400&h=600&fit=crop', tags: ['清楚系'] },
+  { id: 'm002', name: '鈴木 あい',  imageUrl: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=400&h=600&fit=crop', tags: ['グラマー'] },
+  { id: 'm003', name: '山本 さくら',imageUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=400&h=600&fit=crop', tags: ['高身長'] },
+  { id: 'm004', name: '佐藤 ゆり',  imageUrl: 'https://images.unsplash.com/photo-1488716820095-cbe80883c496?w=400&h=600&fit=crop', tags: ['清楚系'] },
+  { id: 'm005', name: '伊藤 めぐ',  imageUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=400&h=600&fit=crop', tags: ['スレンダー'] },
+  { id: 'm006', name: '渡辺 ひな',  imageUrl: 'https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=400&h=600&fit=crop', tags: ['高身長'] },
+  { id: 'm007', name: '中村 りん',  imageUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=600&fit=crop', tags: ['小柄'] },
+  { id: 'm008', name: '小林 まや',  imageUrl: 'https://images.unsplash.com/photo-1520813792240-56fc4a3765a7?w=400&h=600&fit=crop', tags: ['グラマー'] },
+  { id: 'm009', name: '加藤 しほ',  imageUrl: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?w=400&h=600&fit=crop', tags: ['スレンダー'] },
+  { id: 'm010', name: '松本 あんな',imageUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=400&h=600&fit=crop', tags: ['清楚系'] },
+  { id: 'm011', name: '井上 なな',  imageUrl: 'https://images.unsplash.com/photo-1502823403499-6ccfcf4fb453?w=400&h=600&fit=crop', tags: ['小柄'] },
+  { id: 'm012', name: '木村 はるか',imageUrl: 'https://images.unsplash.com/photo-1499952127939-9bbf5af6c51c?w=400&h=600&fit=crop', tags: ['清楚系'] },
 ];
 
-export async function GET() {
+// 誕生日文字列から年代を推定（YYYY-MM-DD 形式）
+function getAgeGroup(birthday?: string): string | null {
+  if (!birthday) return null;
+  const year = parseInt(birthday.slice(0, 4));
+  if (isNaN(year)) return null;
+  const age = new Date().getFullYear() - year;
+  if (age < 20) return '10代';
+  if (age < 30) return '20代';
+  return '30代以上';
+}
+
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const bodyFilter = searchParams.get('body') ?? 'all';  // スレンダー / 普通 / グラマー / all
+  const ageFilter  = searchParams.get('age')  ?? 'all';  // 10代 / 20代 / 30代以上 / all
+
   const affiliateId = process.env.FANZA_AFFILIATE_ID;
   const apiKey      = process.env.FANZA_API_KEY;
 
   // ── 本番: FANZA ActressSearch ─────────────────────────────────────
   if (affiliateId && apiKey) {
     try {
-      // initial パラメータでランダムな行の女優を取得
-      // FANZA ActressSearch は keyword か initial のどちらかが必須
+      // フィルターが指定されている場合はより多く取得してサーバーサイドフィルタリング
+      const hitsCount = (bodyFilter !== 'all' || ageFilter !== 'all') ? '50' : '30';
+
       const INITIALS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら'];
-      const initial = INITIALS[Math.floor(Math.random() * INITIALS.length)];
+      const initial  = INITIALS[Math.floor(Math.random() * INITIALS.length)];
 
       const params = new URLSearchParams({
         site:         'FANZA',
         initial,
-        hits:         '30',
+        hits:         hitsCount,
         offset:       '1',
         affiliate_id: affiliateId,
         api_id:       apiKey,
         output:       'json',
       });
 
-      const url = `https://api.dmm.com/affiliate/v3/ActressSearch?${params}`;
-      console.log('[swipe-deck] fetching initial=' + initial);
+      console.log('[swipe-deck] fetching initial=' + initial + ' body=' + bodyFilter + ' age=' + ageFilter);
 
-      const res = await fetch(url, { cache: 'no-store' });
+      const res = await fetch(`https://api.dmm.com/affiliate/v3/ActressSearch?${params}`, { cache: 'no-store' });
 
       if (!res.ok) {
         const text = await res.text().catch(() => '');
@@ -73,64 +92,91 @@ export async function GET() {
           actress?: Array<{
             id: string;
             name: string;
-            ruby?: string;
             imageURL?: { small?: string; large?: string };
             bust?: string;
             waist?: string;
             hip?: string;
             height?: string;
             birthday?: string;
-            prefectures?: string;
           }>;
         };
       };
-
-      console.log('[swipe-deck] status:', data.result.status, 'total:', data.result.total_count, 'count:', data.result.result_count);
 
       if (String(data.result.status) !== '200') {
         throw new Error(`ActressSearch API status=${data.result.status}`);
       }
 
       const rawActresses = data.result.actress ?? [];
-      // ActressSearch API は large/small のみ返す（medium は存在しない）
-      const withImages = rawActresses.filter(a => a.imageURL?.large || a.imageURL?.small);
-      console.log('[swipe-deck] raw count:', rawActresses.length, 'with images:', withImages.length);
+      console.log('[swipe-deck] raw:', rawActresses.length);
 
-      const actresses: SwipeDeckActress[] = withImages
+      let actresses: SwipeDeckActress[] = rawActresses
+        .filter(a => a.imageURL?.large || a.imageURL?.small)
         .map(a => {
           const tags: string[] = [];
-          // スリーサイズからタグ生成
+
+          // 体型タグ
           if (a.bust) {
             const b = parseInt(a.bust);
-            if (b >= 90) tags.push('グラマー');
+            if (b >= 90)      tags.push('グラマー');
             else if (b <= 78) tags.push('スレンダー');
+            else              tags.push('普通');
           }
+          // 身長タグ
           if (a.height) {
             const h = parseInt(a.height);
-            if (h >= 165) tags.push('高身長');
+            if (h >= 165)      tags.push('高身長');
             else if (h <= 153) tags.push('小柄');
           }
-          if (!tags.length) tags.push('清楚系');
+          // 年代タグ
+          const ageGroup = getAgeGroup(a.birthday);
+          if (ageGroup) tags.push(ageGroup);
+
+          if (!tags.some(t => ['グラマー','スレンダー','普通'].includes(t))) tags.push('清楚系');
+
           return {
-            id: a.id,
-            name: a.name,
+            id:       a.id,
+            name:     a.name,
             imageUrl: a.imageURL!.large ?? a.imageURL!.small!,
             tags,
-          };
-        })
+            _bust:     a.bust ? parseInt(a.bust) : null,
+            _ageGroup: ageGroup,
+          } as SwipeDeckActress & { _bust: number | null; _ageGroup: string | null };
+        });
+
+      // ── サーバーサイドフィルタリング ──────────────────────────────
+      if (bodyFilter !== 'all') {
+        actresses = actresses.filter(a => {
+          const bust = (a as unknown as { _bust: number | null })._bust;
+          if (!bust) return bodyFilter === '普通'; // 不明は普通扱い
+          if (bodyFilter === 'グラマー')   return bust >= 90;
+          if (bodyFilter === 'スレンダー') return bust <= 78;
+          if (bodyFilter === '普通')        return bust > 78 && bust < 90;
+          return true;
+        });
+      }
+
+      if (ageFilter !== 'all') {
+        actresses = actresses.filter(a => {
+          const ag = (a as unknown as { _ageGroup: string | null })._ageGroup;
+          return ag === ageFilter;
+        });
+      }
+
+      // 内部フィールドを除去してスライス
+      const result: SwipeDeckActress[] = actresses
+        .map(({ id, name, imageUrl, tags }) => ({ id, name, imageUrl, tags }))
         .slice(0, 20);
 
-      console.log('[swipe-deck] final actresses count:', actresses.length);
+      console.log('[swipe-deck] after filter:', result.length);
 
-      if (actresses.length < 5) throw new Error(`Too few actresses with images: ${actresses.length}`);
+      if (result.length < 5) throw new Error(`フィルター後の件数不足: ${result.length}`);
 
-      return NextResponse.json({ actresses, source: 'fanza' });
+      return NextResponse.json({ actresses: result, source: 'fanza' });
     } catch (err) {
       console.error('[swipe-deck] FANZA API failed:', String(err));
-      // モックへフォールバック
     }
   }
 
-  // ── モック ───────────────────────────────────────────────────────
+  // ── モック（フォールバック） ─────────────────────────────────────
   return NextResponse.json({ actresses: MOCK_ACTRESSES, source: 'mock' });
 }

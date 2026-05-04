@@ -6,11 +6,9 @@
  * 女優カードを左右にスワイプ（またはボタン操作）して
  * 好みを学習するオンボーディングUI。
  *
- * - タッチ操作（スマホ）: 左右スワイプ
- * - マウス操作（PC）   : ドラッグ or ←/→ボタン
- * - キーボード         : ← → キー
- *
- * 10枚判定後、user_actress_preferences に保存して onComplete() を呼ぶ。
+ * - Step 1: 事前フィルター選択（体型・年代）
+ * - Step 2: スワイプ（タッチ/マウス/キーボード対応）
+ * - 10枚判定後 user_actress_preferences に保存して onComplete() を呼ぶ
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -18,39 +16,68 @@ import { Heart, X, ChevronLeft, ChevronRight, Sparkles, SkipForward } from 'luci
 import type { SwipeDeckActress } from '@/app/api/actress/swipe-deck/route';
 
 interface Props {
-  /** スワイプ完了後に呼ばれるコールバック */
   onComplete: () => void;
-  /** Supabase Auth トークン（ログイン時のみ渡す） */
   authToken?: string;
 }
+
+// ── フィルター定義 ──────────────────────────────────────────────────
+type BodyFilter   = 'all' | 'スレンダー' | '普通' | 'グラマー';
+type AgeFilter    = 'all' | '10代' | '20代' | '30代以上';
+
+const BODY_OPTIONS: { value: BodyFilter; label: string; emoji: string }[] = [
+  { value: 'all',      label: '指定なし',   emoji: '✨' },
+  { value: 'スレンダー', label: 'スレンダー', emoji: '🌿' },
+  { value: '普通',      label: 'ノーマル',   emoji: '⚖️' },
+  { value: 'グラマー',  label: 'グラマー',   emoji: '🔥' },
+];
+
+const AGE_OPTIONS: { value: AgeFilter; label: string }[] = [
+  { value: 'all',   label: '指定なし' },
+  { value: '10代',  label: '10代'    },
+  { value: '20代',  label: '20代'    },
+  { value: '30代以上', label: '30代以上' },
+];
 
 const REQUIRED_SWIPES = 10;
 
 export default function SwipeOnboarding({ onComplete, authToken }: Props) {
-  const [deck, setDeck]           = useState<SwipeDeckActress[]>([]);
-  const [index, setIndex]         = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving]   = useState(false);
+  // ── フィルター選択フェーズ ────────────────────────────────────────
+  const [phase, setPhase]         = useState<'filter' | 'swipe'>('filter');
+  const [bodyFilter, setBodyFilter] = useState<BodyFilter>('all');
+  const [ageFilter, setAgeFilter]   = useState<AgeFilter>('all');
 
-  // ドラッグ状態
-  const [dragX, setDragX]         = useState(0);
+  // ── スワイプフェーズ ─────────────────────────────────────────────
+  const [deck, setDeck]             = useState<SwipeDeckActress[]>([]);
+  const [index, setIndex]           = useState(0);
+  const [isLoading, setIsLoading]   = useState(false);
+  const [isSaving, setIsSaving]     = useState(false);
+
+  const [dragX, setDragX]           = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const dragStartX = useRef(0);
-  const cardRef    = useRef<HTMLDivElement>(null);
+  const dragStartX  = useRef(0);
+  const cardRef     = useRef<HTMLDivElement>(null);
+  const decisions   = useRef<{ actress: SwipeDeckActress; liked: boolean }[]>([]);
 
-  // 判定履歴（ liked = true / false）
-  const decisions = useRef<{ actress: SwipeDeckActress; liked: boolean }[]>([]);
+  // フィルターを適用しながらデッキを取得
+  const loadDeck = useCallback(() => {
+    setIsLoading(true);
+    const params = new URLSearchParams();
+    if (bodyFilter !== 'all') params.set('body', bodyFilter);
+    if (ageFilter  !== 'all') params.set('age',  ageFilter);
 
-  // デッキ取得
-  useEffect(() => {
-    fetch('/api/actress/swipe-deck')
+    fetch(`/api/actress/swipe-deck?${params}`)
       .then(r => r.json())
       .then((d: { actresses: SwipeDeckActress[] }) => {
-        setDeck(d.actresses);
+        setDeck(d.actresses ?? []);
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
-  }, []);
+  }, [bodyFilter, ageFilter]);
+
+  // スワイプフェーズ開始時にデッキ取得
+  useEffect(() => {
+    if (phase === 'swipe') loadDeck();
+  }, [phase, loadDeck]);
 
   // ── 判定処理 ────────────────────────────────────────────────────
   const decide = useCallback(async (liked: boolean) => {
@@ -62,7 +89,6 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
     setIndex(newIndex);
     setDragX(0);
 
-    // REQUIRED_SWIPES 枚に達したら保存
     if (decisions.current.length >= REQUIRED_SWIPES) {
       setIsSaving(true);
       await savePreferences(decisions.current, authToken);
@@ -70,62 +96,106 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
     }
   }, [index, deck, isSaving, authToken, onComplete]);
 
-  // キーボード操作
+  // キーボード操作（スワイプフェーズのみ）
   useEffect(() => {
+    if (phase !== 'swipe') return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'ArrowRight') decide(true);
       if (e.key === 'ArrowLeft')  decide(false);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [decide]);
+  }, [decide, phase]);
 
-  // ── タッチ操作 ──────────────────────────────────────────────────
-  const onTouchStart = (e: React.TouchEvent) => {
-    dragStartX.current = e.touches[0].clientX;
-    setIsDragging(true);
-  };
-  const onTouchMove = (e: React.TouchEvent) => {
-    setDragX(e.touches[0].clientX - dragStartX.current);
-  };
-  const onTouchEnd = () => {
-    setIsDragging(false);
-    if (Math.abs(dragX) > 80) {
-      decide(dragX > 0);
-    } else {
-      setDragX(0);
-    }
-  };
+  // ── タッチ/マウス操作 ─────────────────────────────────────────────
+  const onTouchStart = (e: React.TouchEvent) => { dragStartX.current = e.touches[0].clientX; setIsDragging(true); };
+  const onTouchMove  = (e: React.TouchEvent) => { setDragX(e.touches[0].clientX - dragStartX.current); };
+  const onTouchEnd   = () => { setIsDragging(false); if (Math.abs(dragX) > 80) { decide(dragX > 0); } else { setDragX(0); } };
+  const onMouseDown  = (e: React.MouseEvent) => { dragStartX.current = e.clientX; setIsDragging(true); };
+  const onMouseMove  = (e: React.MouseEvent) => { if (!isDragging) return; setDragX(e.clientX - dragStartX.current); };
+  const onMouseUp    = () => { if (!isDragging) return; setIsDragging(false); if (Math.abs(dragX) > 80) { decide(dragX > 0); } else { setDragX(0); } };
 
-  // ── マウス操作 ──────────────────────────────────────────────────
-  const onMouseDown = (e: React.MouseEvent) => {
-    dragStartX.current = e.clientX;
-    setIsDragging(true);
-  };
-  const onMouseMove = (e: React.MouseEvent) => {
-    if (!isDragging) return;
-    setDragX(e.clientX - dragStartX.current);
-  };
-  const onMouseUp = () => {
-    if (!isDragging) return;
-    setIsDragging(false);
-    if (Math.abs(dragX) > 80) {
-      decide(dragX > 0);
-    } else {
-      setDragX(0);
-    }
-  };
-
-  // ── レンダリング ────────────────────────────────────────────────
   const progress  = Math.min(decisions.current.length, REQUIRED_SWIPES);
   const current   = deck[index];
   const next      = deck[index + 1];
-
-  // カードのスタイル（ドラッグ中の傾き）
   const rotation  = dragX * 0.08;
   const likeAlpha = Math.min(Math.max(dragX / 120, 0), 1);
   const nopeAlpha = Math.min(Math.max(-dragX / 120, 0), 1);
 
+  // ════════════════════════════════════════════════════════════════
+  // フェーズ1: フィルター選択
+  // ════════════════════════════════════════════════════════════════
+  if (phase === 'filter') {
+    return (
+      <div className="flex flex-col items-center w-full max-w-sm mx-auto px-4 py-8 select-none">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center gap-2 bg-primary/10 rounded-full px-4 py-1.5 mb-4">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="text-xs font-extrabold text-primary">STEP 1 / 2</span>
+          </div>
+          <h2 className="text-xl font-extrabold mb-2">好みの条件を教えてください</h2>
+          <p className="text-sm text-foreground/60 leading-relaxed">
+            この条件に近い女優を優先して表示します。<br />後からでも変更できます。
+          </p>
+        </div>
+
+        {/* 体型 */}
+        <div className="w-full mb-6">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">体型の好み</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {BODY_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setBodyFilter(opt.value)}
+                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                  bodyFilter === opt.value
+                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
+                    : 'border-border bg-card text-foreground/70 hover:border-primary/40'
+                }`}
+              >
+                <span className="text-lg mr-1.5">{opt.emoji}</span>{opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 年代 */}
+        <div className="w-full mb-8">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">年齢の好み</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {AGE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setAgeFilter(opt.value)}
+                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                  ageFilter === opt.value
+                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
+                    : 'border-border bg-card text-foreground/70 hover:border-primary/40'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 開始ボタン */}
+        <button
+          onClick={() => setPhase('swipe')}
+          className="w-full py-4 bg-primary text-white rounded-2xl font-extrabold text-base hover:bg-primary/90 transition-all shadow-lg shadow-primary/20 active:scale-95"
+        >
+          スワイプ開始 →
+        </button>
+        <button onClick={onComplete} className="mt-3 text-xs text-foreground/40 underline font-bold hover:text-foreground/60">
+          条件を決めずにスキップ
+        </button>
+      </div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // フェーズ2: スワイプ
+  // ════════════════════════════════════════════════════════════════
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center h-[70vh] gap-4">
@@ -158,17 +228,36 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
 
   return (
     <div className="flex flex-col items-center w-full max-w-sm mx-auto px-4 py-6 select-none">
-
       {/* ヘッダー */}
-      <div className="text-center mb-6">
+      <div className="text-center mb-5">
         <div className="inline-flex items-center gap-2 bg-primary/10 rounded-full px-4 py-1.5 mb-3">
           <Sparkles className="w-4 h-4 text-primary" />
-          <span className="text-xs font-extrabold text-primary">AIが好みを学習します</span>
+          <span className="text-xs font-extrabold text-primary">STEP 2 / 2 — AIが好みを学習します</span>
         </div>
         <h2 className="text-xl font-extrabold mb-1">好みの女優タイプは？</h2>
         <p className="text-sm text-foreground/60">
           右スワイプ or ❤️ で好き、左スワイプ or ✕ で興味なし
         </p>
+      </div>
+
+      {/* フィルターバッジ */}
+      <div className="flex gap-2 mb-4 flex-wrap justify-center">
+        {bodyFilter !== 'all' && (
+          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-bold border border-primary/20">
+            {bodyFilter}
+          </span>
+        )}
+        {ageFilter !== 'all' && (
+          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-bold border border-primary/20">
+            {ageFilter}
+          </span>
+        )}
+        <button
+          onClick={() => { setPhase('filter'); setIndex(0); decisions.current = []; }}
+          className="text-[11px] text-foreground/40 underline font-bold"
+        >
+          条件を変更
+        </button>
       </div>
 
       {/* プログレスバー */}
@@ -187,8 +276,6 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
 
       {/* カードスタック */}
       <div className="relative w-full" style={{ height: '420px' }}>
-
-        {/* 次のカード（背景に薄く） */}
         {next && (
           <div
             className="absolute inset-0 rounded-3xl overflow-hidden border border-border/50 shadow-sm"
@@ -200,7 +287,6 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
           </div>
         )}
 
-        {/* 現在のカード */}
         <div
           ref={cardRef}
           className="absolute inset-0 rounded-3xl overflow-hidden border border-border/30 shadow-xl cursor-grab active:cursor-grabbing"
@@ -225,27 +311,15 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
             className="w-full h-full object-cover pointer-events-none"
             draggable={false}
           />
-
-          {/* グラデーションオーバーレイ */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
 
-          {/* 好き表示（右スワイプ） */}
-          <div
-            className="absolute top-8 left-6 border-4 border-primary rounded-xl px-4 py-2 rotate-[-15deg]"
-            style={{ opacity: likeAlpha }}
-          >
+          <div className="absolute top-8 left-6 border-4 border-primary rounded-xl px-4 py-2 rotate-[-15deg]" style={{ opacity: likeAlpha }}>
             <span className="text-primary font-extrabold text-2xl tracking-widest">LIKE ❤️</span>
           </div>
-
-          {/* 興味なし表示（左スワイプ） */}
-          <div
-            className="absolute top-8 right-6 border-4 border-red-500 rounded-xl px-4 py-2 rotate-[15deg]"
-            style={{ opacity: nopeAlpha }}
-          >
+          <div className="absolute top-8 right-6 border-4 border-red-500 rounded-xl px-4 py-2 rotate-[15deg]" style={{ opacity: nopeAlpha }}>
             <span className="text-red-400 font-extrabold text-2xl tracking-widest">PASS ✕</span>
           </div>
 
-          {/* 女優情報 */}
           <div className="absolute bottom-0 left-0 right-0 p-5 text-white pointer-events-none">
             <h3 className="text-xl font-extrabold mb-1.5 drop-shadow-lg">{current.name}</h3>
             <div className="flex flex-wrap gap-1.5">
@@ -261,7 +335,6 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
 
       {/* 操作ボタン */}
       <div className="flex items-center justify-center gap-5 mt-7">
-        {/* 興味なし */}
         <button
           onClick={() => decide(false)}
           className="w-16 h-16 rounded-full bg-card border-2 border-border flex items-center justify-center shadow-lg hover:border-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 hover:scale-110 transition-all active:scale-95"
@@ -269,18 +342,13 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
         >
           <X className="w-7 h-7 text-red-400" />
         </button>
-
-        {/* スキップ */}
         <button
           onClick={onComplete}
           className="w-10 h-10 rounded-full bg-secondary border border-border flex items-center justify-center hover:bg-border transition-all"
           aria-label="スキップ"
-          title="スキップしてダッシュボードへ"
         >
           <SkipForward className="w-4 h-4 text-foreground/50" />
         </button>
-
-        {/* 好き */}
         <button
           onClick={() => decide(true)}
           className="w-16 h-16 rounded-full bg-card border-2 border-border flex items-center justify-center shadow-lg hover:border-primary hover:bg-primary/5 hover:scale-110 transition-all active:scale-95"
@@ -290,7 +358,6 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
         </button>
       </div>
 
-      {/* PC向けキーボードヒント */}
       <p className="mt-4 text-[11px] text-foreground/40 font-bold hidden md:block">
         <ChevronLeft className="w-3 h-3 inline" /> キーボード矢印キーでも操作できます <ChevronRight className="w-3 h-3 inline" />
       </p>
@@ -298,7 +365,7 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
   );
 }
 
-// ── 好み保存 ─────────────────────────────────────────────────────────
+// ── 好み保存（image_url・tags も送信）────────────────────────────────
 async function savePreferences(
   decisions: { actress: SwipeDeckActress; liked: boolean }[],
   authToken?: string
@@ -306,8 +373,6 @@ async function savePreferences(
   const liked = decisions.filter(d => d.liked);
   if (!liked.length || !authToken) return;
 
-  // /api/videos/feedback の仕組みを流用せず、直接 Supabase を使えないため
-  // 専用エンドポイントを呼ぶ
   try {
     await fetch('/api/actress/preferences', {
       method: 'POST',
@@ -316,7 +381,12 @@ async function savePreferences(
         'Authorization': `Bearer ${authToken}`,
       },
       body: JSON.stringify({
-        likes: liked.map(d => ({ actress_id: d.actress.id, actress_name: d.actress.name })),
+        likes: liked.map(d => ({
+          actress_id:   d.actress.id,
+          actress_name: d.actress.name,
+          image_url:    d.actress.imageUrl,
+          tags:         d.actress.tags,
+        })),
       }),
     });
   } catch (e) {
