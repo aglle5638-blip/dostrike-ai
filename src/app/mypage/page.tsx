@@ -3,18 +3,35 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  Settings,
-  CreditCard,
-  Mail,
-  Bell,
   Shield,
   ArrowLeft,
   LogOut,
   LogIn,
   Loader2,
   User,
+  Heart,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 import { useAuth } from "@/components/AuthProvider";
+import { useEffect, useState, useCallback } from "react";
+
+// ─────────────────────────────────────────────
+// 型定義
+// ─────────────────────────────────────────────
+type TopActress = {
+  actress_id: string;
+  actress_name: string;
+  image_url?: string;
+  score: number;
+  tags?: string[];
+};
+
+type PreferenceAnalysis = {
+  analysisText?: string;
+  characteristics?: string[];
+  topActresses: TopActress[];
+};
 
 // ─────────────────────────────────────────────
 // アバター（Googleなどのアバター画像 or イニシャル）
@@ -47,12 +64,52 @@ function Avatar({ user }: { user: { email?: string; user_metadata?: Record<strin
 // ─────────────────────────────────────────────
 export default function MyPage() {
   const router = useRouter();
-  const { user, isLoading, signOut } = useAuth();
+  const { user, session, isLoading, signOut } = useAuth();
+
+  const [swipeCount, setSwipeCount] = useState<number | null>(null);
+  const [analysis, setAnalysis] = useState<PreferenceAnalysis | null>(null);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
     router.push("/");
   };
+
+  const loadStats = useCallback(async (token: string) => {
+    // スワイプ数
+    try {
+      const res = await fetch("/api/actress/preferences/count", {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json() as { count: number };
+        setSwipeCount(data.count);
+      }
+    } catch { /* ignore */ }
+
+    // 好み分析
+    if (!analysisLoading) {
+      setAnalysisLoading(true);
+      try {
+        const res = await fetch("/api/actress/preferences/analysis", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json() as PreferenceAnalysis;
+          setAnalysis(data);
+        }
+      } catch { /* ignore */ } finally {
+        setAnalysisLoading(false);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (session?.access_token) {
+      loadStats(session.access_token);
+    }
+  }, [session?.access_token, loadStats]);
 
   // プロバイダー情報
   const provider = user?.app_metadata?.provider as string | undefined;
@@ -69,6 +126,8 @@ export default function MyPage() {
     "ゲストユーザー";
 
   const email = user?.email ?? "";
+
+  const hasSwipes = swipeCount !== null && swipeCount > 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -120,77 +179,136 @@ export default function MyPage() {
         {!isLoading && user && (
           <>
             {/* プロフィールカード */}
-            <div className="bg-card border border-border p-6 rounded-3xl shadow-sm mb-8 flex items-center gap-6">
+            <div className="bg-card border border-border p-6 rounded-3xl shadow-sm mb-6 flex items-center gap-6">
               <Avatar user={user} />
               <div className="flex-1 min-w-0">
                 <h2 className="text-xl font-bold mb-1 truncate">{displayName}</h2>
                 {email && (
                   <p className="text-foreground/50 text-sm mb-2 truncate">{email}</p>
                 )}
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="bg-secondary text-foreground/70 px-3 py-1 rounded-full text-xs font-bold border border-border">
-                    {providerLabel}
-                  </span>
-                  <span className="bg-secondary text-foreground/70 px-3 py-1 rounded-full text-xs font-bold border border-border">
-                    無料プラン
-                  </span>
-                </div>
+                <span className="bg-secondary text-foreground/70 px-3 py-1 rounded-full text-xs font-bold border border-border">
+                  {providerLabel}
+                </span>
               </div>
             </div>
 
-            {/* 設定グリッド */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-              <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 cursor-pointer transition-colors group">
-                <div className="bg-primary/10 p-3 rounded-full text-primary group-hover:bg-primary group-hover:text-white transition-colors">
-                  <Mail className="w-5 h-5" />
+            {/* ── スワイプ・好み統計 ── */}
+            <section className="mb-6 space-y-4">
+              <h2 className="text-base font-extrabold text-foreground/70 tracking-wide">あなたの好みデータ</h2>
+
+              {/* スワイプ数バナー */}
+              <div className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4">
+                <div className="bg-primary/10 p-3 rounded-full text-primary flex-shrink-0">
+                  <Sparkles className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="font-bold mb-1">メールアドレス設定</h3>
-                  <p className="text-xs text-foreground/50 leading-relaxed">
-                    ご登録のアドレス変更やパスワード再設定。
-                  </p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-foreground/50 mb-0.5">スワイプ済み女優数</p>
+                  {swipeCount === null ? (
+                    <div className="h-5 w-20 bg-secondary animate-pulse rounded" />
+                  ) : (
+                    <p className="text-xl font-extrabold">
+                      {swipeCount.toLocaleString()}
+                      <span className="text-sm font-normal text-foreground/50 ml-1">人</span>
+                    </p>
+                  )}
                 </div>
+                {!hasSwipes && swipeCount !== null && (
+                  <Link
+                    href="/dashboard"
+                    className="whitespace-nowrap px-4 py-2 bg-primary text-white text-xs font-bold rounded-full hover:bg-primary/90 transition-colors"
+                  >
+                    スワイプを始める
+                  </Link>
+                )}
               </div>
 
-              <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 opacity-50 cursor-not-allowed">
-                <div className="bg-blue-500/10 p-3 rounded-full text-blue-500">
-                  <CreditCard className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold mb-1">支払い・プラン変更</h3>
-                  <p className="text-xs text-foreground/50 leading-relaxed">
-                    準備中です。しばらくお待ちください。
-                  </p>
-                </div>
-              </div>
+              {/* 好み分析 */}
+              {hasSwipes && (
+                <div className="bg-card border border-border rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-accent/10 p-2 rounded-full text-accent flex-shrink-0">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <h3 className="font-bold text-sm">AI好みタイプ分析</h3>
+                  </div>
 
-              <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 cursor-pointer transition-colors group">
-                <div className="bg-purple-500/10 p-3 rounded-full text-purple-500 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                  <Bell className="w-5 h-5" />
-                </div>
-                <div>
-                  <h3 className="font-bold mb-1">通知設定</h3>
-                  <p className="text-xs text-foreground/50 leading-relaxed">
-                    AIおすすめ完了メールやキャンペーン通知の設定。
-                  </p>
-                </div>
-              </div>
+                  {analysisLoading ? (
+                    <div className="space-y-2">
+                      <div className="h-4 bg-secondary animate-pulse rounded w-3/4" />
+                      <div className="h-4 bg-secondary animate-pulse rounded w-2/3" />
+                      <div className="h-4 bg-secondary animate-pulse rounded w-1/2" />
+                    </div>
+                  ) : analysis ? (
+                    <div className="space-y-3">
+                      {/* サマリー */}
+                      {analysis.analysisText && (
+                        <p className="text-sm leading-relaxed bg-primary/5 border border-primary/20 rounded-xl px-4 py-3 text-foreground/80">
+                          🤖 {analysis.analysisText}
+                        </p>
+                      )}
 
-              <div className="bg-card border border-border p-5 rounded-2xl flex items-start gap-4 hover:bg-secondary/50 cursor-pointer transition-colors group">
-                <div className="bg-green-500/10 p-3 rounded-full text-green-500 group-hover:bg-green-500 group-hover:text-white transition-colors">
-                  <Settings className="w-5 h-5" />
+                      {/* 特徴リスト */}
+                      {(analysis.characteristics?.length ?? 0) > 0 && (
+                        <ul className="space-y-1.5">
+                          {analysis.characteristics!.map((c, i) => (
+                            <li key={i} className="text-xs text-foreground/70 leading-relaxed flex gap-2">
+                              <span className="text-primary flex-shrink-0 mt-0.5">▸</span>
+                              <span>{c}</span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+
+                      {/* 好みの女優サムネイル */}
+                      {analysis.topActresses && analysis.topActresses.length > 0 && (
+                        <div>
+                          <p className="text-[10px] text-foreground/40 mb-2 font-bold uppercase tracking-wide">好みの女優TOP</p>
+                          <div className="flex gap-2 overflow-x-auto pb-1">
+                            {analysis.topActresses.slice(0, 8).map((a) => (
+                              <div key={a.actress_id} className="flex-shrink-0 text-center">
+                                {a.image_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={a.image_url}
+                                    alt={a.actress_name}
+                                    className="w-14 h-14 rounded-full object-cover border-2 border-primary/20"
+                                  />
+                                ) : (
+                                  <div className="w-14 h-14 rounded-full bg-secondary border-2 border-border flex items-center justify-center text-lg">
+                                    {a.actress_name.charAt(0)}
+                                  </div>
+                                )}
+                                <p className="text-[9px] text-foreground/50 mt-1 w-14 truncate">{a.actress_name}</p>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-foreground/40">分析データを読み込めませんでした。</p>
+                  )}
                 </div>
-                <div>
-                  <h3 className="font-bold mb-1">その他の設定</h3>
-                  <p className="text-xs text-foreground/50 leading-relaxed">
-                    表示モードや年齢確認、その他の基本設定。
-                  </p>
+              )}
+
+              {/* キープ一覧へのリンク */}
+              <Link
+                href="/dashboard?mode=keep"
+                className="bg-card border border-border rounded-2xl p-5 flex items-center gap-4 hover:border-yellow-400/60 hover:bg-yellow-400/5 transition-all group"
+              >
+                <div className="bg-yellow-400/10 p-3 rounded-full text-yellow-500 flex-shrink-0 group-hover:bg-yellow-400 group-hover:text-black transition-colors">
+                  <Heart className="w-5 h-5" />
                 </div>
-              </div>
-            </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-sm mb-0.5">キープした動画</h3>
+                  <p className="text-xs text-foreground/50">いいね・キープした作品の一覧を見る</p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-foreground/30 group-hover:text-yellow-500 group-hover:translate-x-1 transition-all flex-shrink-0" />
+              </Link>
+            </section>
 
             {/* Danger Zone */}
-            <div className="bg-red-500/5 border border-red-500/20 p-6 rounded-3xl">
+            <div className="bg-red-500/5 border border-red-500/20 p-6 rounded-3xl mb-4">
               <h3 className="font-extrabold text-red-500 flex items-center gap-2 mb-4">
                 <Shield className="w-5 h-5" /> Danger Zone
               </h3>
@@ -205,7 +323,7 @@ export default function MyPage() {
             </div>
 
             {/* ログアウト */}
-            <div className="mt-12 mb-8 flex justify-center">
+            <div className="mt-8 mb-8 flex justify-center">
               <button
                 onClick={handleSignOut}
                 className="flex items-center gap-2 text-foreground/50 hover:text-foreground font-bold transition-colors"
