@@ -995,7 +995,7 @@ export default function DashboardPage() {
                                 {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> キープ中</div>}
                                 {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                               </div>
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden md:flex flex-col items-center justify-center gap-1.5 p-2">
                                 <button
                                   onClick={(e) => { e.stopPropagation(); if (video.sampleMovieUrl) setSampleVideoUrl(video.sampleMovieUrl); else window.open(video.affiliateUrl, '_blank'); }}
                                   className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
@@ -1100,7 +1100,7 @@ export default function DashboardPage() {
                                 {fb === 'keep' && <div className="bg-yellow-400 text-black px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><Heart className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/>キープ中</div>}
                                 {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/>いいね</div>}
                               </div>
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden md:flex flex-col items-center justify-center gap-1.5 p-2">
                                 <a href={adVideo.affiliateUrl} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap">
                                   <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> FANZAで見る
                                 </a>
@@ -1330,7 +1330,7 @@ export default function DashboardPage() {
                       </div>
 
                       {/* ホバーオーバーレイ */}
-                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden md:flex flex-col items-center justify-center gap-1.5 p-2">
                         <button
                           onClick={(e) => { e.stopPropagation(); if (v.sampleMovieUrl) setSampleVideoUrl(v.sampleMovieUrl); else window.open(v.affiliateUrl, '_blank'); }}
                           className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
@@ -1576,7 +1576,7 @@ export default function DashboardPage() {
                           )}
 
                           {/* ホバー：ボタン */}
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-2 p-3">
+                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden md:flex flex-col items-center justify-center gap-2 p-3">
                             {affiliateUrl ? (
                               <>
                                 <a
