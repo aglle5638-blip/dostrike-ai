@@ -29,6 +29,7 @@ import {
   pickTemplate,
   getTodayFaceTypeId,
   truncateForX,
+  X_TIME_TEMPLATES,
   SITE_URL,
 } from '@/lib/social-templates';
 
@@ -240,12 +241,24 @@ export async function POST(request: NextRequest) {
 
   const results: Record<string, unknown> = { startedAt: new Date().toISOString() };
 
+  // ── 時間帯判定（UTC→JST）────────────────────────────────────────────────
+  const jstHour = (new Date().getUTCHours() + 9) % 24;
+  const timeSlot = jstHour < 10 ? 'morning' : jstHour < 17 ? 'noon' : 'evening';
+
   // ── コンテンツ選択 ────────────────────────────────────────────────────────
   const faceTypeId = getTodayFaceTypeId();
-  const xText = truncateForX(pickTemplate('x', faceTypeId));
+
+  // 時間帯別テンプレートを50%、汎用CTAテンプレートを50%で使用
+  const useTimeTemplate = Math.random() < 0.5;
+  const timeTemplates = X_TIME_TEMPLATES[timeSlot];
+  const rawXText = useTimeTemplate && timeTemplates?.length
+    ? timeTemplates[Math.floor(Math.random() * timeTemplates.length)].replace('{URL}', SITE_URL)
+    : pickTemplate('x', faceTypeId);
+  const xText = truncateForX(rawXText);
   const igCaption = pickTemplate('instagram');
 
   results.faceTypeId = faceTypeId;
+  results.timeSlot = timeSlot;
   results.xTextLength = xText.length;
 
   // ── X 投稿 ───────────────────────────────────────────────────────────────
