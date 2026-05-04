@@ -26,7 +26,7 @@ function loadEnv(path) {
       const eqIdx = trimmed.indexOf('=');
       if (eqIdx < 0) continue;
       const key = trimmed.slice(0, eqIdx).trim();
-      const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '');
+      const val = trimmed.slice(eqIdx + 1).trim().replace(/^["']|["']$/g, '').replace(/\\n/g, '');
       if (!process.env[key]) process.env[key] = val;
     }
   } catch { /* ignore */ }
@@ -47,6 +47,8 @@ if (!SUPABASE_URL || !SERVICE_KEY) {
   console.error('ERROR: NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY が設定されていません');
   process.exit(1);
 }
+console.log('Supabase URL:', SUPABASE_URL);
+console.log('Service key length:', SERVICE_KEY.length);
 
 const supabase = createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false } });
 
@@ -181,10 +183,15 @@ for (const initial of INITIALS) {
       });
 
       if (batch.length >= BATCH_SIZE) {
-        await upsertBatch(batch);
-        grandUpserted   += batch.length;
-        initialUpserted += batch.length;
-        console.log(`    -> upserted ${batch.length} (累計: ${grandUpserted})`);
+        try {
+          await upsertBatch(batch);
+          grandUpserted   += batch.length;
+          initialUpserted += batch.length;
+          console.log(`    -> upserted ${batch.length} (累計: ${grandUpserted})`);
+        } catch(e) {
+          console.error(`    -> upsert FAILED: ${e.message}`);
+          process.exit(1);
+        }
         batch = [];
       }
     }
@@ -195,10 +202,15 @@ for (const initial of INITIALS) {
 
   // 残バッチ
   if (batch.length > 0) {
-    await upsertBatch(batch);
-    grandUpserted   += batch.length;
-    initialUpserted += batch.length;
-    console.log(`    -> upserted ${batch.length} (残バッチ)`);
+    try {
+      await upsertBatch(batch);
+      grandUpserted   += batch.length;
+      initialUpserted += batch.length;
+      console.log(`    -> upserted ${batch.length} (残バッチ)`);
+    } catch(e) {
+      console.error(`    -> 残バッチ upsert FAILED: ${e.message}`);
+      process.exit(1);
+    }
   }
 
   console.log(`  [${initial}] 完了: upserted=${initialUpserted}, total_in_fanza=${totalCount}`);
