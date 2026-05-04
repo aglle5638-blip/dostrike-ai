@@ -15,6 +15,7 @@ export const SITE_URL = 'https://dostrike-ai.vercel.app';
 export const MARKETING_SETS = [
   {
     id: 'type_a',
+    faceTypeId: 'A1',
     imageFile: 'beauty_a.png',
     label: '清楚系・黒髪ロング（水着）',
     templates: [
@@ -24,6 +25,7 @@ export const MARKETING_SETS = [
   },
   {
     id: 'type_b',
+    faceTypeId: 'D1',
     imageFile: 'beauty_b.png',
     label: 'ギャル系・金髪（水着）',
     templates: [
@@ -33,6 +35,7 @@ export const MARKETING_SETS = [
   },
   {
     id: 'type_c',
+    faceTypeId: 'E1',
     imageFile: 'beauty_c.png',
     label: 'クール系・ショート（水着）',
     templates: [
@@ -42,6 +45,7 @@ export const MARKETING_SETS = [
   },
   {
     id: 'ui_mockup',
+    faceTypeId: 'F1',
     imageFile: 'app_ui.png',
     label: 'アプリUI画面（汎用）',
     templates: [

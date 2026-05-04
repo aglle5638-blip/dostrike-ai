@@ -338,10 +338,26 @@ export async function POST(request: NextRequest) {
   // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
   
+  let mainImageUrl = `${baseUrl}/post-images/${marketingSet.imageFile}`;
+  
+  if (marketingSet.id !== 'ui_mockup') {
+    try {
+      const { fetchVideosByTypeIds } = await import('@/lib/fanza/api');
+      const { videos } = await fetchVideosByTypeIds([marketingSet.faceTypeId], { limit: 5 });
+      // ランダムに1つ選ぶ（毎回同じにならないように）
+      if (videos.length > 0) {
+        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
+        if (randomVideo.thumbnailUrl) {
+          mainImageUrl = randomVideo.thumbnailUrl;
+        }
+      }
+    } catch (err) {
+      console.warn('[social-post] Failed to fetch FANZA video thumbnail, falling back to local image:', err);
+    }
+  }
+
   // 投稿に添付する画像のリスト（メイン画像 + UIモックアップ）
-  const imagesToUpload = [
-    `${baseUrl}/post-images/${marketingSet.imageFile}`
-  ];
+  const imagesToUpload = [mainImageUrl];
   
   // もしメイン画像が app_ui.png でなければ、app_ui.png も追加して両方投稿する
   if (marketingSet.imageFile !== 'app_ui.png') {
