@@ -34,10 +34,71 @@ import {
 } from '@/lib/social-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// X (Twitter) API v2 ヘルパー
+// X 画像アップロード
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** OAuth 1.0a 署名を生成する */
+/**
+ * 画像URLまたはbase64データをX Media Upload APIでアップロードする。
+ * @returns media_id_string または null
+ */
+async function uploadImageToX(imageUrl: string): Promise<string | null> {
+  const apiKey = process.env.TWITTER_API_KEY;
+  const accessToken = process.env.TWITTER_ACCESS_TOKEN;
+  if (!apiKey || !accessToken) return null;
+
+  try {
+    // 画像をfetchしてbase64に変換
+    const imgRes = await fetch(imageUrl);
+    if (!imgRes.ok) {
+      console.error('[social-post] Failed to fetch image:', imgRes.status);
+      return null;
+    }
+    const arrayBuffer = await imgRes.arrayBuffer();
+    const base64 = Buffer.from(arrayBuffer).toString('base64');
+    const mimeType = imgRes.headers.get('content-type') ?? 'image/jpeg';
+
+    // Media Upload API (v1.1)
+    const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
+    const uploadMethod = 'POST';
+    const nonce = crypto.randomBytes(16).toString('hex');
+    const timestamp = Math.floor(Date.now() / 1000).toString();
+    const oauthParams = {
+      oauth_consumer_key: apiKey,
+      oauth_nonce: nonce,
+      oauth_signature_method: 'HMAC-SHA1',
+      oauth_timestamp: timestamp,
+      oauth_token: accessToken,
+      oauth_version: '1.0',
+    };
+    const authHeader = buildOAuthHeader(uploadMethod, uploadUrl, {}, oauthParams);
+
+    const form = new URLSearchParams();
+    form.append('media_data', base64);
+    form.append('media_type', mimeType);
+
+    const uploadRes = await fetch(uploadUrl, {
+      method: uploadMethod,
+      headers: {
+        Authorization: authHeader,
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: form.toString(),
+    });
+
+    if (!uploadRes.ok) {
+      const err = await uploadRes.text();
+      console.error('[social-post] Media upload error:', uploadRes.status, err);
+      return null;
+    }
+
+    const uploadJson = await uploadRes.json();
+    return uploadJson?.media_id_string ?? null;
+  } catch (err) {
+    console.error('[social-post] uploadImageToX error:', err);
+    return null;
+  }
+}
+
 function buildOAuthHeader(
   method: string,
   url: string,
@@ -83,7 +144,10 @@ function buildOAuthHeader(
  * X API v2 でツイートを投稿する。
  * @returns 成功時は投稿ID、失敗時は null
  */
-async function postToX(text: string): Promise<{ id: string } | { error: string } | null> {
+async function postToX(
+  text: string,
+  mediaId?: string | null,
+): Promise<{ id: string } | { error: string } | null> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
 
@@ -106,7 +170,9 @@ async function postToX(text: string): Promise<{ id: string } | { error: string }
   };
 
   const authHeader = buildOAuthHeader(method, url, {}, oauthParams);
-  const body = JSON.stringify({ text });
+  const payload: Record<string, unknown> = { text };
+  if (mediaId) payload.media = { media_ids: [mediaId] };
+  const body = JSON.stringify(payload);
 
   const res = await fetch(url, {
     method,
@@ -261,11 +327,29 @@ export async function POST(request: NextRequest) {
   results.timeSlot = timeSlot;
   results.xTextLength = xText.length;
 
+  // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
+  // POST_IMAGES_BASE_URL が設定されていれば画像を添付（なければテキストのみ）
+  // 画像は beauty_a.png / beauty_b.png / beauty_c.png をローテーション
+  // ※ より際どい画像に差し替える場合は public/post-images/ に追加してください
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
+  const IMAGE_NAMES = ['beauty_a.png', 'beauty_b.png', 'beauty_c.png'];
+  const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
+  const imageFile = IMAGE_NAMES[dayIndex % IMAGE_NAMES.length];
+  const imageUrl = `${baseUrl}/post-images/${imageFile}`;
+
+  let xMediaId: string | null = null;
+  try {
+    xMediaId = await uploadImageToX(imageUrl);
+    results.xMediaId = xMediaId ?? 'skipped';
+  } catch (err) {
+    console.warn('[social-post] Image upload failed, posting without image:', err);
+  }
+
   // ── X 投稿 ───────────────────────────────────────────────────────────────
   try {
-    const xResult = await postToX(xText);
+    const xResult = await postToX(xText, xMediaId);
     if (xResult && 'id' in xResult) {
-      results.x = { status: 'posted', postId: xResult.id };
+      results.x = { status: 'posted', postId: xResult.id, hasImage: !!xMediaId };
       await logPost({ platform: 'x', content: xText, post_id: xResult.id, status: 'posted', face_type_id: faceTypeId });
     } else {
       const errMsg = xResult && 'error' in xResult ? xResult.error : 'unknown error';
