@@ -305,7 +305,6 @@ export default function DashboardPage() {
     return () => { cancelled = true; };
   }, [typeSlots, activeSlotIndex, sortBy]);
   const [keepFilter, setKeepFilter] = useState<'all'|'keep'|'strike'>('all');
-  const [sampleVideoUrl, setSampleVideoUrl] = useState<string | null>(null);
 
   // Undo Toast State
   type UndoToast = { seed: string; prevAction: string; message: string; timerId: ReturnType<typeof setTimeout> } | null;
@@ -622,18 +621,15 @@ export default function DashboardPage() {
 
   const handleDeleteActress = async (actressId: string) => {
     if (!session?.access_token) return;
-    // 楽観的UI更新
-    let removed = false;
+    // 存在確認して楽観的UI更新（両方のstateを同時更新）
+    const exists = preferenceAnalysis?.topActresses.some(a => a.actress_id === actressId);
+    if (!exists) return;
     setPreferenceAnalysis(prev => {
       if (!prev) return prev;
       const filtered = prev.topActresses.filter(a => a.actress_id !== actressId);
-      if (filtered.length === prev.topActresses.length) return prev;
-      removed = true;
-      return { ...prev, topActresses: filtered, count: prev.count - 1 };
+      return { ...prev, topActresses: filtered, count: Math.max(0, prev.count - 1) };
     });
-    if (removed) {
-      setPreferenceCount(prev => Math.max(0, (prev ?? 1) - 1));
-    }
+    setPreferenceCount(prev => Math.max(0, (prev ?? 1) - 1));
     // API削除
     try {
       await fetch(`/api/actress/preferences?actress_id=${encodeURIComponent(actressId)}`, {
@@ -999,38 +995,44 @@ export default function DashboardPage() {
                                 {fb === 'strike' && <div className="bg-primary text-white px-2 py-0.5 rounded-lg font-bold text-[10px] shadow-lg flex items-center whitespace-nowrap flex-shrink-0"><ThumbsUp className="w-2.5 h-2.5 mr-1 fill-current flex-shrink-0"/> いいね</div>}
                               </div>
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                                <a
+                                  href={video.affiliateUrl}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
                                   className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                                 >
                                   <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                                </button>
+                                </a>
                                 <a
-                                  href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                                  href={video.affiliateUrl}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                                   onClick={(e) => e.stopPropagation()}
                                 >
-                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
+                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビュー
                                 </a>
                               </div>
                             </div>
                             <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                              <button
-                                onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(video.sampleMovieUrl ?? null); if (!video.sampleMovieUrl) window.open(video.affiliateUrl, '_blank'); }}
+                              <a
+                                href={video.affiliateUrl}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                onClick={(e) => e.stopPropagation()}
                                 className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
                               >
-                                <Play className="w-3 h-3 fill-current" /> サンプル再生
-                              </button>
+                                サンプル再生
+                              </a>
                               <a
-                                href={`https://video.dmm.co.jp/av/content/?id=${video.id}#review`}
+                                href={video.affiliateUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                <MessageSquare className="w-3 h-3" /> レビューを見る
+                                レビュー
                               </a>
                             </div>
                             <div className="p-2.5 md:p-3 bg-secondary/10 flex flex-col border-t border-border/50 gap-1">
@@ -1334,40 +1336,46 @@ export default function DashboardPage() {
 
                       {/* ホバーオーバーレイ */}
                       <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 group-active:opacity-100 transition-opacity duration-300 flex flex-col items-center justify-center gap-1.5 p-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(v.sampleMovieUrl ?? null); if (!v.sampleMovieUrl) window.open(v.affiliateUrl, '_blank'); }}
+                        <a
+                          href={v.affiliateUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
                           className="flex items-center justify-center gap-1 bg-white text-black py-1.5 px-4 rounded-full text-[10px] font-bold shadow-lg hover:scale-105 transition-transform whitespace-nowrap"
                         >
                           <Play className="w-2.5 h-2.5 fill-current flex-shrink-0" /> サンプル再生
-                        </button>
+                        </a>
                         <a
-                          href={`https://video.dmm.co.jp/av/content/?id=${v.id}#review`}
+                          href={v.affiliateUrl}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="flex items-center justify-center gap-1 bg-white/20 border border-white/40 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                           onClick={(e) => e.stopPropagation()}
                         >
-                          <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
+                          <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビュー
                         </a>
                       </div>
                     </div>
 
                     {/* スマホ用アクションボタン（常時表示） */}
                     <div className="flex gap-2 px-2 py-1.5 md:hidden">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); setSampleVideoUrl(v.sampleMovieUrl ?? null); if (!v.sampleMovieUrl) window.open(v.affiliateUrl, '_blank'); }}
+                      <a
+                        href={v.affiliateUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="flex flex-1 items-center justify-center gap-1 bg-black text-white py-1.5 rounded-lg text-[10px] font-bold"
                       >
-                        <Play className="w-3 h-3 fill-current" /> サンプル再生
-                      </button>
+                        サンプル再生
+                      </a>
                       <a
-                        href={`https://video.dmm.co.jp/av/content/?id=${v.id}#review`}
+                        href={v.affiliateUrl}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex flex-1 items-center justify-center gap-1 bg-secondary text-foreground py-1.5 rounded-lg text-[10px] font-bold"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <MessageSquare className="w-3 h-3" /> レビューを見る
+                        レビュー
                       </a>
                     </div>
 
@@ -1596,7 +1604,7 @@ export default function DashboardPage() {
                                   rel="noopener noreferrer"
                                   className="flex items-center justify-center gap-1 bg-white/20 border border-white/50 text-white py-1.5 px-4 rounded-full text-[10px] font-bold hover:bg-white/30 transition-colors whitespace-nowrap"
                                 >
-                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビューを見る
+                                  <MessageSquare className="w-2.5 h-2.5 flex-shrink-0" /> レビュー
                                 </a>
                               </>
                             ) : (
@@ -2020,32 +2028,7 @@ export default function DashboardPage() {
       {/* カタログモーダル */}
       {showCatalogModal && renderCatalogModal()}
 
-      {/* サンプル動画プレーヤー（DMMのlitevideoプレーヤーをiframe埋め込み） */}
-      {sampleVideoUrl && (
-        <div
-          className="fixed inset-0 z-[600] flex items-center justify-center bg-black/90 backdrop-blur-sm"
-          onClick={() => setSampleVideoUrl(null)}
-        >
-          <div className="relative w-full max-w-3xl mx-2" onClick={(e) => e.stopPropagation()}>
-            <div className="relative w-full" style={{ paddingTop: '56.25%' }}>
-              <iframe
-                src={sampleVideoUrl}
-                className="absolute inset-0 w-full h-full rounded-2xl border-0"
-                allow="autoplay; fullscreen"
-                allowFullScreen
-                title="サンプル動画"
-              />
-            </div>
-            <button
-              onClick={() => setSampleVideoUrl(null)}
-              className="absolute -top-4 -right-4 w-9 h-9 bg-white text-black rounded-full flex items-center justify-center font-bold shadow-xl z-10"
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <p className="text-center text-white/50 text-xs mt-2">背景をタップして閉じる</p>
-          </div>
-        </div>
-      )}
+      {/* サンプル動画: affiliateUrlで直接FANZAへ遷移するため、iframeモーダルは廃止 */}
 
       {/* ライトボックス（モーダル外に配置してモーダルが閉じても表示できる） */}
       {previewFace && (

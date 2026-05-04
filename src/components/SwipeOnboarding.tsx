@@ -23,6 +23,8 @@ interface Props {
 // ── フィルター定義 ──────────────────────────────────────────────────
 type BodyFilter   = 'all' | 'スレンダー' | '普通' | 'グラマー';
 type AgeFilter    = 'all' | '10代' | '20代' | '30代以上';
+type HeightFilter = 'all' | '小柄' | '普通' | '高身長';
+type VibeFilter   = 'all' | '清楚系' | 'キュート系' | 'セクシー系' | 'クール系' | '天然系';
 
 const BODY_OPTIONS: { value: BodyFilter; label: string; emoji: string }[] = [
   { value: 'all',      label: '指定なし',   emoji: '✨' },
@@ -31,20 +33,38 @@ const BODY_OPTIONS: { value: BodyFilter; label: string; emoji: string }[] = [
   { value: 'グラマー',  label: 'グラマー',   emoji: '🔥' },
 ];
 
+const HEIGHT_OPTIONS: { value: HeightFilter; label: string; emoji: string }[] = [
+  { value: 'all',    label: '指定なし', emoji: '✨' },
+  { value: '小柄',   label: '小柄',     emoji: '🌸' },
+  { value: '普通',   label: 'ノーマル', emoji: '⚖️' },
+  { value: '高身長', label: '高身長',   emoji: '💃' },
+];
+
 const AGE_OPTIONS: { value: AgeFilter; label: string }[] = [
-  { value: 'all',   label: '指定なし' },
-  { value: '10代',  label: '10代'    },
-  { value: '20代',  label: '20代'    },
+  { value: 'all',      label: '指定なし' },
+  { value: '10代',     label: '10代'    },
+  { value: '20代',     label: '20代'    },
   { value: '30代以上', label: '30代以上' },
+];
+
+const VIBE_OPTIONS: { value: VibeFilter; label: string; emoji: string }[] = [
+  { value: 'all',      label: '指定なし',   emoji: '✨' },
+  { value: '清楚系',   label: '清楚・上品', emoji: '🌸' },
+  { value: 'キュート系', label: 'キュート', emoji: '💗' },
+  { value: 'セクシー系', label: 'セクシー', emoji: '🔥' },
+  { value: 'クール系', label: 'クール',     emoji: '🖤' },
+  { value: '天然系',   label: '天然・素朴', emoji: '🌿' },
 ];
 
 const REQUIRED_SWIPES = 10;
 
 export default function SwipeOnboarding({ onComplete, authToken }: Props) {
   // ── フィルター選択フェーズ ────────────────────────────────────────
-  const [phase, setPhase]         = useState<'filter' | 'swipe'>('filter');
-  const [bodyFilter, setBodyFilter] = useState<BodyFilter>('all');
-  const [ageFilter, setAgeFilter]   = useState<AgeFilter>('all');
+  const [phase, setPhase]             = useState<'filter' | 'swipe'>('filter');
+  const [bodyFilter, setBodyFilter]   = useState<BodyFilter>('all');
+  const [ageFilter, setAgeFilter]     = useState<AgeFilter>('all');
+  const [heightFilter, setHeightFilter] = useState<HeightFilter>('all');
+  const [vibeFilter, setVibeFilter]   = useState<VibeFilter>('all');
 
   // ── スワイプフェーズ ─────────────────────────────────────────────
   const [deck, setDeck]             = useState<SwipeDeckActress[]>([]);
@@ -55,6 +75,7 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
   const [dragX, setDragX]           = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const dragStartX  = useRef(0);
+  const dragXRef    = useRef(0);          // ref版（staleクロージャ回避用）
   const cardRef     = useRef<HTMLDivElement>(null);
   const decisions   = useRef<{ actress: SwipeDeckActress; liked: boolean }[]>([]);
 
@@ -62,8 +83,10 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
   const loadDeck = useCallback(() => {
     setIsLoading(true);
     const params = new URLSearchParams();
-    if (bodyFilter !== 'all') params.set('body', bodyFilter);
-    if (ageFilter  !== 'all') params.set('age',  ageFilter);
+    if (bodyFilter   !== 'all') params.set('body',   bodyFilter);
+    if (ageFilter    !== 'all') params.set('age',    ageFilter);
+    if (heightFilter !== 'all') params.set('height', heightFilter);
+    if (vibeFilter   !== 'all') params.set('vibe',   vibeFilter);
 
     fetch(`/api/actress/swipe-deck?${params}`)
       .then(r => r.json())
@@ -72,7 +95,7 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
         setIsLoading(false);
       })
       .catch(() => setIsLoading(false));
-  }, [bodyFilter, ageFilter]);
+  }, [bodyFilter, ageFilter, heightFilter, vibeFilter]);
 
   // スワイプフェーズ開始時にデッキ取得
   useEffect(() => {
@@ -122,13 +145,41 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
     }
   }, [phase, isLoading, isSaving, deck.length, index, authToken, onComplete]);
 
-  // ── タッチ/マウス操作 ─────────────────────────────────────────────
-  const onTouchStart = (e: React.TouchEvent) => { dragStartX.current = e.touches[0].clientX; setIsDragging(true); };
-  const onTouchMove  = (e: React.TouchEvent) => { setDragX(e.touches[0].clientX - dragStartX.current); };
-  const onTouchEnd   = () => { setIsDragging(false); if (Math.abs(dragX) > 80) { decide(dragX > 0); } else { setDragX(0); } };
-  const onMouseDown  = (e: React.MouseEvent) => { dragStartX.current = e.clientX; setIsDragging(true); };
-  const onMouseMove  = (e: React.MouseEvent) => { if (!isDragging) return; setDragX(e.clientX - dragStartX.current); };
-  const onMouseUp    = () => { if (!isDragging) return; setIsDragging(false); if (Math.abs(dragX) > 80) { decide(dragX > 0); } else { setDragX(0); } };
+  // ── タッチ/マウス操作（dragXRefでstaleクロージャを回避）─────────
+  const onTouchStart = (e: React.TouchEvent) => {
+    dragStartX.current = e.touches[0].clientX;
+    dragXRef.current = 0;
+    setIsDragging(true);
+  };
+  const onTouchMove = (e: React.TouchEvent) => {
+    const v = e.touches[0].clientX - dragStartX.current;
+    dragXRef.current = v;
+    setDragX(v);
+  };
+  const onTouchEnd = () => {
+    setIsDragging(false);
+    const v = dragXRef.current;
+    dragXRef.current = 0;
+    if (Math.abs(v) > 80) decide(v > 0); else setDragX(0);
+  };
+  const onMouseDown = (e: React.MouseEvent) => {
+    dragStartX.current = e.clientX;
+    dragXRef.current = 0;
+    setIsDragging(true);
+  };
+  const onMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging) return;
+    const v = e.clientX - dragStartX.current;
+    dragXRef.current = v;
+    setDragX(v);
+  };
+  const onMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const v = dragXRef.current;
+    dragXRef.current = 0;
+    if (Math.abs(v) > 80) decide(v > 0); else setDragX(0);
+  };
 
   const progress  = Math.min(decisions.current.length, REQUIRED_SWIPES);
   const current   = deck[index];
@@ -155,8 +206,8 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
         </div>
 
         {/* 体型 */}
-        <div className="w-full mb-6">
-          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">体型の好み</h3>
+        <div className="w-full mb-5">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">① 体型の好み</h3>
           <div className="grid grid-cols-2 gap-2">
             {BODY_OPTIONS.map(opt => (
               <button
@@ -174,9 +225,29 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
           </div>
         </div>
 
+        {/* 身長 */}
+        <div className="w-full mb-5">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">② 身長の好み</h3>
+          <div className="grid grid-cols-3 gap-2">
+            {HEIGHT_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setHeightFilter(opt.value)}
+                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                  heightFilter === opt.value
+                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
+                    : 'border-border bg-card text-foreground/70 hover:border-primary/40'
+                }`}
+              >
+                <span className="text-base mr-1">{opt.emoji}</span>{opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* 年代 */}
-        <div className="w-full mb-8">
-          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">年齢の好み</h3>
+        <div className="w-full mb-5">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">③ 年代の好み</h3>
           <div className="grid grid-cols-2 gap-2">
             {AGE_OPTIONS.map(opt => (
               <button
@@ -189,6 +260,26 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
                 }`}
               >
                 {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* 雰囲気 */}
+        <div className="w-full mb-8">
+          <h3 className="text-xs font-extrabold text-foreground/60 uppercase tracking-widest mb-3">④ 雰囲気・顔立ちの好み</h3>
+          <div className="grid grid-cols-2 gap-2">
+            {VIBE_OPTIONS.map(opt => (
+              <button
+                key={opt.value}
+                onClick={() => setVibeFilter(opt.value)}
+                className={`py-3 rounded-2xl font-bold text-sm border-2 transition-all ${
+                  vibeFilter === opt.value
+                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
+                    : 'border-border bg-card text-foreground/70 hover:border-primary/40'
+                }`}
+              >
+                <span className="text-lg mr-1.5">{opt.emoji}</span>{opt.label}
               </button>
             ))}
           </div>
@@ -276,13 +367,23 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
             {bodyFilter}
           </span>
         )}
+        {heightFilter !== 'all' && (
+          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-bold border border-primary/20">
+            {heightFilter}
+          </span>
+        )}
         {ageFilter !== 'all' && (
           <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-bold border border-primary/20">
             {ageFilter}
           </span>
         )}
+        {vibeFilter !== 'all' && (
+          <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[11px] font-bold border border-primary/20">
+            {vibeFilter}
+          </span>
+        )}
         <button
-          onClick={() => { setPhase('filter'); setIndex(0); decisions.current = []; }}
+          onClick={() => { setPhase('filter'); setIndex(0); decisions.current = []; dragXRef.current = 0; setDragX(0); }}
           className="text-[11px] text-foreground/40 underline font-bold"
         >
           条件を変更

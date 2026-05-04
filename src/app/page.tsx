@@ -44,9 +44,9 @@ const ARTICLES = [
 ];
 
 const STEPS = [
-  { num: "01", title: "顔タイプを選ぶ", desc: "30パターンから好みのタイプを1〜5つ選択" },
-  { num: "02", title: "AIがマッチング", desc: "FANZAの数万本からスコア順に6本を提案" },
-  { num: "03", title: "フィードバック", desc: "キープ・いいねで好みをAIに学習させる" },
+  { num: "01", title: "好みの女優をスワイプ", desc: "体型・身長・年代・雰囲気などの条件を選んで女優写真を左右にスワイプ" },
+  { num: "02", title: "AIが好みを分析", desc: "スワイプ結果をもとにAIがあなたの好みタイプを自動で解析" },
+  { num: "03", title: "ドストライク作品を提案", desc: "FANZAの膨大なコンテンツから好みに合う作品をAIがリアルタイムでキュレーション" },
 ];
 
 export default function Home() {
@@ -91,8 +91,8 @@ export default function Home() {
             </h1>
 
             <p className="text-base md:text-lg text-foreground/70 max-w-2xl mx-auto leading-relaxed mb-10">
-              清楚系・ギャル系・クール系など<strong className="text-foreground">30の顔タイプ</strong>から好みを選ぶだけ。
-              最新AIがFANZAの膨大なコンテンツを解析し、あなただけのドストライク作品をキュレーションします。
+              好みの女優写真を<strong className="text-foreground">スワイプするだけ</strong>でAIが好みを学習。
+              体型・身長・年代・雰囲気まで細かく指定して、あなただけのドストライク作品をFANZAからキュレーションします。
             </p>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -136,23 +136,25 @@ export default function Home() {
         <section className="px-4 py-14 md:py-20">
           <div className="max-w-4xl mx-auto">
             <div className="text-center mb-10">
-              <h2 className="text-xl md:text-2xl font-extrabold mb-3">6グループ30タイプから「好み」を選ぶ</h2>
+              <h2 className="text-xl md:text-2xl font-extrabold mb-3">スワイプで好みを伝えるだけ</h2>
               <p className="text-foreground/60 text-sm md:text-base max-w-xl mx-auto leading-relaxed">
-                清楚系・キュート系・お姉さん系など、感覚的にピンとくるタイプを選ぶだけでOK。
-                AIが各タイプの特徴をFANZA作品と照合してマッチングします。
+                好みの女優写真を右スワイプ（好き）・左スワイプ（パス）するだけ。
+                AIがスワイプパターンを分析し、FANZAの作品と自動でマッチングします。
               </p>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4 mb-8">
-              {FACE_GROUPS.map((group) => (
-                <div
-                  key={group.name}
-                  className={`border rounded-2xl p-4 md:p-5 flex flex-col gap-2 ${group.color}`}
-                >
-                  <div className="text-3xl">{group.emoji}</div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8">
+              {[
+                { emoji: "🌿", label: "体型", desc: "スレンダー・グラマーなど", color: "bg-green-50 border-green-200 text-green-700" },
+                { emoji: "💃", label: "身長", desc: "小柄・標準・高身長", color: "bg-blue-50 border-blue-200 text-blue-700" },
+                { emoji: "🕐", label: "年代", desc: "10代〜30代以上", color: "bg-purple-50 border-purple-200 text-purple-700" },
+                { emoji: "🌸", label: "雰囲気", desc: "清楚系・セクシー系など", color: "bg-pink-50 border-pink-200 text-pink-700" },
+              ].map((item) => (
+                <div key={item.label} className={`border rounded-2xl p-4 md:p-5 flex flex-col gap-2 ${item.color}`}>
+                  <div className="text-3xl">{item.emoji}</div>
                   <div>
-                    <h3 className="font-extrabold text-sm md:text-base">{group.name}</h3>
-                    <p className="text-[11px] md:text-xs leading-relaxed opacity-70 mt-0.5">{group.desc}</p>
+                    <h3 className="font-extrabold text-sm md:text-base">{item.label}</h3>
+                    <p className="text-[11px] md:text-xs leading-relaxed opacity-70 mt-0.5">{item.desc}</p>
                   </div>
                 </div>
               ))}
@@ -213,7 +215,7 @@ export default function Home() {
               さっそく、試してみませんか？
             </h2>
             <p className="text-foreground/60 mb-8 leading-relaxed text-sm md:text-base">
-              顔タイプを選ぶだけ。登録不要・完全無料でAIマッチングを体験できます。
+              スワイプするだけ。登録不要・完全無料でAIマッチングを体験できます。
             </p>
             <Link
               href="/dashboard"

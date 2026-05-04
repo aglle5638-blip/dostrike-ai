@@ -5,8 +5,10 @@
  * 優先順: fanza_actresses DB キャッシュ → FANZA API ライブ → モック
  *
  * Query params:
- *   body?: 'スレンダー' | '普通' | 'グラマー'
- *   age?:  '10代' | '20代' | '30代以上'
+ *   body?:   'スレンダー' | '普通' | 'グラマー'
+ *   age?:    '10代' | '20代' | '30代以上'
+ *   height?: '小柄' | '普通' | '高身長'
+ *   vibe?:   '清楚系' | 'キュート系' | 'セクシー系' | 'クール系' | '天然系'
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -58,8 +60,10 @@ function shuffle<T>(arr: T[]): T[] {
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
-  const bodyFilter = searchParams.get('body') ?? 'all';
-  const ageFilter  = searchParams.get('age')  ?? 'all';
+  const bodyFilter   = searchParams.get('body')   ?? 'all';
+  const ageFilter    = searchParams.get('age')    ?? 'all';
+  const heightFilter = searchParams.get('height') ?? 'all';
+  const vibeFilter   = searchParams.get('vibe')   ?? 'all';
 
   const affiliateId = process.env.FANZA_AFFILIATE_ID;
   const apiKey      = process.env.FANZA_API_KEY;
@@ -74,8 +78,9 @@ export async function GET(req: NextRequest) {
         .select('id, name, image_url, tags')
         .not('image_url', 'is', null);
 
-      if (bodyFilter !== 'all') query = query.eq('body_type', bodyFilter);
-      if (ageFilter  !== 'all') query = query.eq('age_group',  ageFilter);
+      if (bodyFilter   !== 'all') query = query.eq('body_type',   bodyFilter);
+      if (ageFilter    !== 'all') query = query.eq('age_group',   ageFilter);
+      if (heightFilter !== 'all') query = query.eq('height_type', heightFilter);
 
       // 最大200件取得してJSでランダムシャッフル → 毎回違う顔ぶれ
       const { data, error } = await query.limit(200);
@@ -103,7 +108,7 @@ export async function GET(req: NextRequest) {
       const ALL_INITIALS = ['あ', 'か', 'さ', 'た', 'な', 'は', 'ま', 'や', 'ら'];
       // フィルターあり: 全9イニシャル並列（多数取得してフィルター後に十分な枚数を確保）
       // フィルターなし: ランダム1イニシャル
-      const hasFilter = bodyFilter !== 'all' || ageFilter !== 'all';
+      const hasFilter = bodyFilter !== 'all' || ageFilter !== 'all' || heightFilter !== 'all' || vibeFilter !== 'all';
       const targetInitials = hasFilter ? ALL_INITIALS : [ALL_INITIALS[Math.floor(Math.random() * ALL_INITIALS.length)]];
 
       type RawActress = {
@@ -147,7 +152,7 @@ export async function GET(req: NextRequest) {
       console.log(`[swipe-deck] FANZA API: ${unique.length} unique actresses from ${targetInitials.length} initials`);
 
       // タグ付け
-      const toActress = (a: RawActress): SwipeDeckActress & { _bust: number | null; _ageGroup: string | null } => {
+      const toActress = (a: RawActress): SwipeDeckActress & { _bust: number | null; _heightNum: number | null; _ageGroup: string | null } => {
         const tags: string[] = [];
         const bustNum = a.bust ? parseInt(a.bust) : null;
         if (bustNum !== null) {
@@ -155,10 +160,11 @@ export async function GET(req: NextRequest) {
           else if (bustNum <= 78) tags.push('スレンダー');
           else                    tags.push('普通');
         }
-        if (a.height) {
-          const h = parseInt(a.height);
-          if (h >= 165)      tags.push('高身長');
-          else if (h <= 153) tags.push('小柄');
+        const heightNum = a.height ? parseInt(a.height) : null;
+        if (heightNum !== null) {
+          if (heightNum >= 165)      tags.push('高身長');
+          else if (heightNum <= 153) tags.push('小柄');
+          else                       tags.push('標準身長');
         }
         const ageGroup = getAgeGroup(a.birthday);
         if (ageGroup) tags.push(ageGroup);
@@ -166,41 +172,61 @@ export async function GET(req: NextRequest) {
         return {
           id: a.id, name: a.name,
           imageUrl: a.imageURL!.large ?? a.imageURL!.small!,
-          tags, _bust: bustNum, _ageGroup: ageGroup,
+          tags, _bust: bustNum, _heightNum: heightNum, _ageGroup: ageGroup,
         };
       };
 
       const allTagged = unique.map(toActress);
 
-      // bodyフィルタリング
+      // フィルターマッチ関数
       const bodyMatch = (a: { _bust: number | null }) => {
-        if (!a._bust) return bodyFilter === '普通' || bodyFilter === 'all';
+        if (bodyFilter === 'all') return true;
+        if (!a._bust) return bodyFilter === '普通';
         if (bodyFilter === 'グラマー')   return a._bust >= 90;
         if (bodyFilter === 'スレンダー') return a._bust <= 78;
         if (bodyFilter === '普通')       return a._bust > 78 && a._bust < 90;
         return true;
       };
 
-      // ageフィルタリング
       const ageMatch = (a: { _ageGroup: string | null }) =>
         ageFilter === 'all' || a._ageGroup === ageFilter;
 
-      // フィルター適用（段階的に緩和）
-      const strictFiltered = allTagged.filter(a => bodyMatch(a) && ageMatch(a));
-      const bodyOnlyFiltered = bodyFilter !== 'all' ? allTagged.filter(a => bodyMatch(a)) : allTagged;
+      const heightMatch = (a: { _heightNum: number | null }) => {
+        if (heightFilter === 'all') return true;
+        if (!a._heightNum) return heightFilter === '普通';
+        if (heightFilter === '高身長') return a._heightNum >= 165;
+        if (heightFilter === '小柄')   return a._heightNum <= 153;
+        if (heightFilter === '普通')   return a._heightNum > 153 && a._heightNum < 165;
+        return true;
+      };
 
-      // 最終的に使う結果: 両方一致 → body一致のみ（age緩和） → 全員（体型も緩和）
-      const candidates = strictFiltered.length >= 5
-        ? strictFiltered
-        : bodyOnlyFiltered.length >= 5
-          ? bodyOnlyFiltered
-          : allTagged;
+      const vibeMatch = (a: { tags: string[] }) => {
+        if (vibeFilter === 'all') return true;
+        return a.tags.includes(vibeFilter);
+      };
+
+      // フィルター適用（年齢は絶対に緩和しない。体型・身長は必要に応じて緩和）
+      const strictFiltered = allTagged.filter(a => bodyMatch(a) && ageMatch(a) && heightMatch(a) && vibeMatch(a));
+
+      let candidates: typeof allTagged;
+      if (strictFiltered.length >= 5) {
+        candidates = strictFiltered;
+      } else if (ageFilter !== 'all') {
+        // 年齢指定あり → 年齢は維持、体型・身長・雰囲気を順次緩和
+        const ageBodyFiltered = allTagged.filter(a => ageMatch(a) && bodyMatch(a));
+        const ageOnlyFiltered = allTagged.filter(a => ageMatch(a));
+        candidates = ageBodyFiltered.length > 0 ? ageBodyFiltered : ageOnlyFiltered.length > 0 ? ageOnlyFiltered : allTagged;
+      } else {
+        // 年齢指定なし → 体型・身長でフィルタ、足りなければ全体
+        const bodyHeightFiltered = allTagged.filter(a => bodyMatch(a) && heightMatch(a));
+        candidates = bodyHeightFiltered.length >= 5 ? bodyHeightFiltered : allTagged;
+      }
 
       const result: SwipeDeckActress[] = shuffle(candidates)
         .map(({ id, name, imageUrl, tags }) => ({ id, name, imageUrl, tags }))
         .slice(0, 20);
 
-      console.log(`[swipe-deck] strict=${strictFiltered.length} bodyOnly=${bodyOnlyFiltered.length} final=${result.length}`);
+      console.log(`[swipe-deck] strict=${strictFiltered.length} candidates=${candidates.length} final=${result.length}`);
 
       if (result.length >= 3) {
         return NextResponse.json({ actresses: result, source: 'fanza' });
