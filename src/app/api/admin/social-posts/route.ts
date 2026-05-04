@@ -17,6 +17,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'x-admin-secret, content-type',
+};
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS });
+}
+
 function isAuthorized(request: NextRequest): boolean {
   if (process.env.NODE_ENV === 'development') return true;
   const adminSecret = process.env.ADMIN_SECRET;
@@ -27,7 +37,7 @@ function isAuthorized(request: NextRequest): boolean {
 
 export async function GET(request: NextRequest) {
   if (!isAuthorized(request)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401, headers: CORS });
   }
 
   const { searchParams } = new URL(request.url);
@@ -77,5 +87,6 @@ export async function GET(request: NextRequest) {
     },
   };
 
-  return NextResponse.json({ posts: data, summary });
+  return NextResponse.json({ posts: data, summary }, { headers: CORS });
 }
+
