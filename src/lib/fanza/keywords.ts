@@ -84,11 +84,38 @@ export function aggregateKeywords(typeIds: string[]): string[] {
 }
 
 /**
- * FANZA API の keyword パラメータ文字列を構築する（最大 3 語）。
+ * FANZA API の keyword パラメータ文字列を段階的に構築する。
+ * FANZA はAND検索のため、語数が増えると件数が激減する。
+ * - 1スロット: primary[0] + primary[1] + secondary[0]（3語）→ フォールバック用に2語・1語も返す
+ * - 複数スロット: 各スロットのprimary[0]のみ、最大2語
+ * @returns [keyword3, keyword2, keyword1] の順（APIがフォールバックで使用）
  */
+export function buildFanzaKeywordCandidates(typeIds: string[]): string[] {
+  if (typeIds.length === 1) {
+    const kw = TYPE_KEYWORDS[typeIds[0]];
+    if (!kw) return [''];
+    const p0 = kw.primary[0] ?? '';
+    const p1 = kw.primary[1] ?? '';
+    const s0 = kw.secondary[0] ?? '';
+    const k3 = [p0, p1, s0].filter(Boolean).join(' ');
+    const k2 = [p0, p1].filter(Boolean).join(' ');
+    const k1 = p0;
+    return [k3, k2, k1].filter(Boolean);
+  }
+  // 複数スロット: 各スロットのprimary[0]のみ（最大2語）
+  const primarySet = new Set<string>();
+  for (const id of typeIds) {
+    const kw = TYPE_KEYWORDS[id];
+    if (kw?.primary[0]) primarySet.add(kw.primary[0]);
+  }
+  const k2 = [...primarySet].slice(0, 2).join(' ');
+  const k1 = [...primarySet][0] ?? '';
+  return [k2, k1].filter(Boolean);
+}
+
+/** @deprecated 後方互換。新コードは buildFanzaKeywordCandidates を使用 */
 export function buildFanzaKeyword(typeIds: string[]): string {
-  const kws = aggregateKeywords(typeIds);
-  return kws.slice(0, 3).join(' ');
+  return buildFanzaKeywordCandidates(typeIds)[0] ?? '';
 }
 
 /**

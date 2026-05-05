@@ -14,7 +14,6 @@ function LoginForm() {
   const supabase = useMemo(() => createClient(), []);
 
   const [isLoadingGoogle, setIsLoadingGoogle] = useState(false);
-  const [isLoadingApple, setIsLoadingApple] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // すでにログイン済みならダッシュボードへ
@@ -51,20 +50,6 @@ function LoginForm() {
     // エラーがなければ supabase が自動でリダイレクトする
   };
 
-  const signInWithApple = async () => {
-    setIsLoadingApple(true);
-    setError(null);
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: "apple",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
-    });
-    if (error) {
-      setError("Appleログインに失敗しました。");
-      setIsLoadingApple(false);
-    }
-  };
 
   if (authLoading) {
     return (
@@ -108,7 +93,7 @@ function LoginForm() {
           {/* Googleログイン */}
           <button
             onClick={signInWithGoogle}
-            disabled={isLoadingGoogle || isLoadingApple}
+            disabled={isLoadingGoogle}
             className="flex items-center justify-center w-full gap-3 px-4 py-3.5 text-sm font-bold bg-white text-gray-900 border border-gray-200 rounded-2xl hover:bg-gray-50 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {isLoadingGoogle ? (
@@ -122,30 +107,6 @@ function LoginForm() {
               </svg>
             )}
             Googleでログイン
-          </button>
-
-          {/* セパレーター */}
-          <div className="relative flex items-center gap-3">
-            <div className="flex-1 h-px bg-border" />
-            <span className="text-xs text-foreground/40 font-bold">または</span>
-            <div className="flex-1 h-px bg-border" />
-          </div>
-
-          {/* Apple ログイン（Apple HIG準拠: 黒背景） */}
-          <button
-            onClick={signInWithApple}
-            disabled={isLoadingGoogle || isLoadingApple}
-            className="flex items-center justify-center w-full gap-3 px-4 py-3.5 text-sm font-bold bg-black text-white rounded-2xl hover:bg-gray-900 active:scale-[0.98] transition-all shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {isLoadingApple ? (
-              <Loader2 className="w-5 h-5 animate-spin text-white" />
-            ) : (
-              /* Apple SVG（Apple Brandのガイドライン準拠） */
-              <svg viewBox="0 0 24 24" className="w-5 h-5 flex-shrink-0" fill="white">
-                <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.7 9.05 7.42c1.33.07 2.22.7 2.97.73.95-.18 1.87-.8 2.89-.76 1.23.07 2.17.53 2.78 1.35-2.52 1.5-1.91 4.85.56 5.79-.52 1.43-1.18 2.83-2.2 3.75zM12.03 7.25c-.14-2.26 1.72-4.07 3.84-4.25.26 2.42-2.18 4.25-3.84 4.25z" />
-              </svg>
-            )}
-            Appleでサインイン
           </button>
 
           {/* ゲストとして続ける */}
