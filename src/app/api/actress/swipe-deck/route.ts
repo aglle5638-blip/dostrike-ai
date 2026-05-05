@@ -72,49 +72,89 @@ export async function GET(req: NextRequest) {
   const apiKey      = process.env.FANZA_API_KEY;
 
   // ── 優先1: fanza_actresses DB キャッシュ ─────────────────────────
-  // height_type カラムはDBに存在しない可能性があるため、JS側でフィルタリング
+  // 年齢フィルターは絶対に崩さない。体型・身長のみ段階的に緩和する。
   const supabase = createServiceClient();
   if (supabase) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let query: any = supabase
-        .from('fanza_actresses')
-        .select('id, name, image_url, tags, bust, height')
-        .not('image_url', 'is', null);
+      type DBRow = { id: string; name: string; image_url: string; tags: string[]; bust: number | null; height: number | null };
 
-      // body_type と age_group はDBカラムとして存在する
-      if (bodyFilter !== 'all') query = query.eq('body_type', bodyFilter);
-      if (ageFilter  !== 'all') query = query.eq('age_group',  ageFilter);
+      /** DB から指定条件で取得する汎用ヘルパー */
+      const dbQuery = async (body: string, age: string): Promise<DBRow[]> => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let q: any = supabase!
+          .from('fanza_actresses')
+          .select('id, name, image_url, tags, bust, height')
+          .not('image_url', 'is', null);
+        if (body !== 'all') q = q.eq('body_type', body);
+        if (age  !== 'all') q = q.eq('age_group',  age);
+        const { data, error } = await q.limit(400);
+        if (error || !data) return [];
+        return data as DBRow[];
+      };
 
-      const { data, error } = await query.limit(400);
+      /** 身長フィルターをJS側で適用（データ欠損時は「普通」扱い） */
+      const applyHeightFilter = (rows: DBRow[]): DBRow[] => {
+        if (heightFilter === 'all') return rows;
+        const filtered = rows.filter(r => {
+          if (!r.height) return heightFilter === '普通';
+          if (heightFilter === '高身長') return r.height >= 165;
+          if (heightFilter === '小柄')   return r.height <= 153;
+          if (heightFilter === '普通')   return r.height > 153 && r.height < 165;
+          return true;
+        });
+        // 身長フィルターで結果が激減するなら元に戻す（身長は緩和OK）
+        return filtered.length >= 4 ? filtered : rows;
+      };
 
-      if (!error && data && (data as unknown[]).length >= 4) {
-        type DBRow = { id: string; name: string; image_url: string; tags: string[]; bust: number | null; height: number | null };
-        let rows = data as DBRow[];
+      // ──────────────────────────────────────────────────────────────
+      // 年齢フィルターあり: 年齢は絶対に維持し、体型のみ段階的に緩和
+      // ──────────────────────────────────────────────────────────────
+      if (ageFilter !== 'all') {
+        // Step1: 年齢 + 体型 両方一致
+        let rows = bodyFilter !== 'all' ? await dbQuery(bodyFilter, ageFilter) : [];
 
-        // 身長フィルターはJS側で適用
-        if (heightFilter !== 'all') {
-          rows = rows.filter(r => {
-            if (!r.height) return heightFilter === '普通';
-            if (heightFilter === '高身長') return r.height >= 165;
-            if (heightFilter === '小柄')   return r.height <= 153;
-            if (heightFilter === '普通')   return r.height > 153 && r.height < 165;
-            return true;
-          });
-          // 身長フィルターで結果が少なければ元のrowsに戻す
-          if (rows.length < 4) rows = data as DBRow[];
+        // Step2: 体型を緩和（年齢は維持）
+        if (rows.length < 4) {
+          rows = await dbQuery('all', ageFilter);
         }
 
-        const actresses: SwipeDeckActress[] = shuffle(rows).slice(0, 20).map((a) => ({
-          id:       a.id,
-          name:     a.name,
-          imageUrl: a.image_url,
-          tags:     (a.tags as string[]) ?? [],
-        }));
-        console.log(`[swipe-deck] DB hit: ${actresses.length} actresses (body=${bodyFilter} age=${ageFilter} height=${heightFilter})`);
-        return NextResponse.json({ actresses, source: 'db' });
+        if (rows.length >= 1) {
+          // 年齢データがある女優のみ（age_group が指定値と一致する行のみ）
+          // ※ dbQuery で eq('age_group', ageFilter) 済みなので追加フィルター不要
+          const finalRows = applyHeightFilter(rows);
+          const actresses: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
+            id: a.id, name: a.name, imageUrl: a.image_url, tags: (a.tags as string[]) ?? [],
+          }));
+          console.log(`[swipe-deck] DB hit (age-strict): ${actresses.length} actresses (body=${bodyFilter} age=${ageFilter} height=${heightFilter})`);
+          return NextResponse.json({ actresses, source: 'db' });
+        }
+
+        // 年齢データが全くDB上に存在しない場合のみFANZA APIへ
+        console.log(`[swipe-deck] DB has 0 rows for age=${ageFilter}, falling back to FANZA API (age-strict mode)`);
+
+      } else {
+        // ──────────────────────────────────────────────────────────
+        // 年齢フィルターなし: 体型・身長で絞り込み
+        // ──────────────────────────────────────────────────────────
+        // Step1: 体型一致
+        let rows = await dbQuery(bodyFilter, 'all');
+
+        // Step2: 体型も緩和（全体）
+        if (rows.length < 4) {
+          rows = await dbQuery('all', 'all');
+        }
+
+        if (rows.length >= 4) {
+          const finalRows = applyHeightFilter(rows);
+          const actresses: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
+            id: a.id, name: a.name, imageUrl: a.image_url, tags: (a.tags as string[]) ?? [],
+          }));
+          console.log(`[swipe-deck] DB hit: ${actresses.length} actresses (body=${bodyFilter} age=all height=${heightFilter})`);
+          return NextResponse.json({ actresses, source: 'db' });
+        }
+
+        console.log(`[swipe-deck] DB insufficient, falling back to FANZA API`);
       }
-      console.log(`[swipe-deck] DB insufficient (${data?.length ?? 0} rows), falling back to FANZA API`);
     } catch (err) {
       console.error('[swipe-deck] DB error:', err);
     }
@@ -220,22 +260,32 @@ export async function GET(req: NextRequest) {
         return true;
       };
 
-      // フィルター適用（段階的緩和。年齢は最優先で維持）
+      // ── フィルター適用 ────────────────────────────────────────────
+      // 【原則】年齢フィルターは絶対に崩さない。年齢不明の女優を混入させない。
+      //        体型・身長フィルターのみ段階的に緩和する。
       const strictFiltered = allTagged.filter(a => bodyMatch(a) && ageMatch(a) && heightMatch(a));
 
       let candidates: typeof allTagged;
-      if (strictFiltered.length >= 5) {
-        // 全条件一致
-        candidates = strictFiltered;
-      } else if (ageFilter !== 'all') {
-        // 年齢指定あり → 年齢は維持、体型・身長を段階的に緩和
-        const ageBodyFiltered   = allTagged.filter(a => ageMatch(a) && bodyMatch(a));
-        const ageOnlyFiltered   = allTagged.filter(a => ageMatch(a));
-        if (ageBodyFiltered.length > 0)  candidates = ageBodyFiltered;
-        else if (ageOnlyFiltered.length > 0) candidates = ageOnlyFiltered;
-        else candidates = allTagged;
+
+      if (ageFilter !== 'all') {
+        // 年齢指定あり → 年齢条件を絶対に維持
+        // Step1: 全条件一致
+        if (strictFiltered.length >= 1) {
+          candidates = strictFiltered;
+        } else {
+          // Step2: 体型緩和（身長は維持）
+          const ageHeightFiltered = allTagged.filter(a => ageMatch(a) && heightMatch(a));
+          if (ageHeightFiltered.length >= 1) {
+            candidates = ageHeightFiltered;
+          } else {
+            // Step3: 身長も緩和（年齢のみ維持）
+            const ageOnlyFiltered = allTagged.filter(a => ageMatch(a));
+            // 年齢不明女優は混入させない。0件なら空配列を返す。
+            candidates = ageOnlyFiltered;
+          }
+        }
       } else {
-        // 年齢指定なし → 体型・身長でフィルタ、足りなければ全体
+        // 年齢指定なし → 体型・身長でフィルタ、足りなければ全体（年齢制約なし）
         const bodyHeightFiltered = allTagged.filter(a => bodyMatch(a) && heightMatch(a));
         const bodyOnlyFiltered   = allTagged.filter(a => bodyMatch(a));
         if (bodyHeightFiltered.length >= 5) candidates = bodyHeightFiltered;
