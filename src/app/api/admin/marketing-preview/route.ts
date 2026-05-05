@@ -45,11 +45,37 @@ export async function GET(request: NextRequest) {
         );
         if (videos.length > 0) {
           const pick = videos[Math.floor(Math.random() * videos.length)];
-          if (pick.thumbnailUrl) contentImageUrl = pick.thumbnailUrl;
           if (pick.actress) actressName = pick.actress.split(/[・、,，]/)[0].trim();
         }
       } catch {
         /* fallback to static image */
+      }
+
+      // 女優プロフィール写真を取得（動画サムネイルより投稿テキストと整合性が高い）
+      if (actressName) {
+        try {
+          const affiliateId = process.env.FANZA_AFFILIATE_ID;
+          const apiKey = process.env.FANZA_API_KEY;
+          if (affiliateId && apiKey) {
+            const params = new URLSearchParams({
+              site: 'FANZA', keyword: actressName, hits: '5', offset: '1',
+              affiliate_id: affiliateId, api_id: apiKey, output: 'json',
+            });
+            const res = await fetch(`https://api.dmm.com/affiliate/v3/ActressSearch?${params}`,
+              { signal: AbortSignal.timeout(5000) });
+            if (res.ok) {
+              const data = await res.json() as {
+                result: { status: string | number; actress?: Array<{ name: string; imageURL?: { large?: string; small?: string } }> };
+              };
+              if (String(data.result.status) === '200') {
+                const actresses = data.result.actress ?? [];
+                const pick = actresses.find(a => a.name === actressName) ?? actresses[0];
+                const profileUrl = pick?.imageURL?.large ?? pick?.imageURL?.small;
+                if (profileUrl) contentImageUrl = profileUrl;
+              }
+            }
+          }
+        } catch { /* keep fallback */ }
       }
 
       // ── スマホモックアップ画像（投稿2枚目）──────────────────

@@ -4,22 +4,13 @@
  * Vercel Cron（JST 8:00 / 12:00 / 21:00）から呼ばれる自動投稿エンドポイント。
  * 実行内容:
  *   1. X (Twitter) API v2 でテキスト投稿
- *   2. Instagram Graph API でキャプション付き投稿（画像URLが設定されている場合）
- *   3. Supabase の social_posts テーブルに投稿ログを記録
+ *      - 画像①: FANZA ActressSearch でキーワード一致の女優プロフィール写真
+ *      - 画像②: generate-marketing-image でスマホモックアップを動的生成
+ *   2. Supabase の social_posts テーブルに投稿ログを記録
  *
  * ローカルテスト:
  *   curl -X POST http://localhost:3000/api/cron/social-post \
  *     -H "Authorization: Bearer $CRON_SECRET"
- *
- * 環境変数:
- *   CRON_SECRET                    — Vercel Cron 認証トークン
- *   TWITTER_API_KEY                — X API キー
- *   TWITTER_API_SECRET             — X API シークレット
- *   TWITTER_ACCESS_TOKEN           — X アクセストークン
- *   TWITTER_ACCESS_TOKEN_SECRET    — X アクセストークンシークレット
- *   INSTAGRAM_ACCESS_TOKEN         — Meta Graph API アクセストークン
- *   INSTAGRAM_BUSINESS_ACCOUNT_ID  — Instagram ビジネスアカウント ID
- *   INSTAGRAM_CARD_IMAGE_URL       — 投稿に使う画像の公開URL（省略可）
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -27,7 +18,6 @@ import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/server';
 import {
   getTodayMarketingSet,
-  pickInstagramTemplate,
   fillTemplate,
   truncateForX,
   X_TIME_TEMPLATES,
@@ -35,30 +25,75 @@ import {
 } from '@/lib/social-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// X 画像アップロード
+// FANZA ActressSearch: キーワード一致の女優プロフィール写真を取得
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * 画像URLまたはbase64データをX Media Upload APIでアップロードする。
+ * 女優名で FANZA ActressSearch を呼び出しプロフィール写真URL を返す。
+ * 動画サムネイル（パッケ画）より一貫性が高く、テキストと整合した画像を得られる。
+ */
+async function fetchActressProfileImage(actressName: string): Promise<string | null> {
+  const affiliateId = process.env.FANZA_AFFILIATE_ID;
+  const apiKey = process.env.FANZA_API_KEY;
+  if (!affiliateId || !apiKey) return null;
+  try {
+    const params = new URLSearchParams({
+      site: 'FANZA',
+      keyword: actressName,
+      hits: '5',
+      offset: '1',
+      affiliate_id: affiliateId,
+      api_id: apiKey,
+      output: 'json',
+    });
+    const res = await fetch(
+      `https://api.dmm.com/affiliate/v3/ActressSearch?${params}`,
+      { signal: AbortSignal.timeout(5000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      result: {
+        status: string | number;
+        actress?: Array<{ name: string; imageURL?: { large?: string; small?: string } }>;
+      };
+    };
+    if (String(data.result.status) !== '200') return null;
+    const actresses = data.result.actress ?? [];
+    // 完全一致優先、なければ先頭
+    const pick = actresses.find(a => a.name === actressName) ?? actresses[0];
+    return pick?.imageURL?.large ?? pick?.imageURL?.small ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// X 画像アップロード (multipart/form-data)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * 画像URLを取得して X Media Upload API (v1.1) にアップロードする。
+ * multipart/form-data + raw binary を使用（base64 URL エンコードの二重エンコード問題を回避）。
  * @returns media_id_string または null
  */
 async function uploadImageToX(imageUrl: string): Promise<string | null> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-  if (!apiKey || !accessToken) return null;
+  if (!apiKey || !accessToken) {
+    console.warn('[social-post] Twitter credentials missing, skipping image upload');
+    return null;
+  }
 
   try {
-    // 画像をfetchしてbase64に変換
-    const imgRes = await fetch(imageUrl);
+    const imgRes = await fetch(imageUrl, { signal: AbortSignal.timeout(10000) });
     if (!imgRes.ok) {
-      console.error('[social-post] Failed to fetch image:', imgRes.status);
+      console.error('[social-post] Failed to fetch image:', imgRes.status, imageUrl.slice(0, 100));
       return null;
     }
     const arrayBuffer = await imgRes.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString('base64');
     const mimeType = imgRes.headers.get('content-type') ?? 'image/jpeg';
+    console.log(`[social-post] Fetched image: ${arrayBuffer.byteLength} bytes, type: ${mimeType}`);
 
-    // Media Upload API (v1.1)
     const uploadUrl = 'https://upload.twitter.com/1.1/media/upload.json';
     const uploadMethod = 'POST';
     const nonce = crypto.randomBytes(16).toString('hex');
@@ -71,19 +106,18 @@ async function uploadImageToX(imageUrl: string): Promise<string | null> {
       oauth_token: accessToken,
       oauth_version: '1.0',
     };
+    // multipart/form-data: ボディパラメータは OAuth シグネチャに含めない
     const authHeader = buildOAuthHeader(uploadMethod, uploadUrl, {}, oauthParams);
 
-    const form = new URLSearchParams();
-    form.append('media_data', base64);
-    form.append('media_type', mimeType);
+    // FormData (multipart) + raw binary — base64 URLエンコードの問題を回避
+    const form = new FormData();
+    form.append('media', new Blob([arrayBuffer], { type: mimeType }), 'upload');
 
     const uploadRes = await fetch(uploadUrl, {
       method: uploadMethod,
-      headers: {
-        Authorization: authHeader,
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form.toString(),
+      headers: { Authorization: authHeader },
+      // Content-Type は fetch が multipart/form-data; boundary=... を自動設定
+      body: form,
     });
 
     if (!uploadRes.ok) {
@@ -93,7 +127,9 @@ async function uploadImageToX(imageUrl: string): Promise<string | null> {
     }
 
     const uploadJson = await uploadRes.json();
-    return uploadJson?.media_id_string ?? null;
+    const mediaId = uploadJson?.media_id_string ?? null;
+    console.log('[social-post] Uploaded media_id:', mediaId);
+    return mediaId;
   } catch (err) {
     console.error('[social-post] uploadImageToX error:', err);
     return null;
@@ -197,75 +233,6 @@ async function postToX(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Instagram Graph API ヘルパー
-// ─────────────────────────────────────────────────────────────────────────────
-
-/**
- * Instagram にキャプション付き投稿をする。
- * 画像URLが設定されていない場合は投稿をスキップする。
- * @returns 成功時は投稿ID、スキップ・失敗時は null
- */
-async function postToInstagram(caption: string): Promise<string | null> {
-  const accessToken = process.env.INSTAGRAM_ACCESS_TOKEN;
-  const accountId = process.env.INSTAGRAM_BUSINESS_ACCOUNT_ID;
-  const imageUrl = process.env.INSTAGRAM_CARD_IMAGE_URL;
-
-  if (!accessToken || !accountId) {
-    console.warn('[social-post] Instagram credentials not configured, skipping');
-    return null;
-  }
-
-  if (!imageUrl) {
-    console.warn('[social-post] INSTAGRAM_CARD_IMAGE_URL not set, skipping Instagram post');
-    return null;
-  }
-
-  // Step 1: メディアコンテナ作成
-  const createRes = await fetch(
-    `https://graph.facebook.com/v19.0/${accountId}/media`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        image_url: imageUrl,
-        caption,
-        access_token: accessToken,
-      }),
-    },
-  );
-
-  if (!createRes.ok) {
-    const err = await createRes.text();
-    console.error('[social-post] Instagram create media error:', createRes.status, err);
-    return null;
-  }
-
-  const { id: containerId } = await createRes.json();
-
-  // Step 2: 公開
-  const publishRes = await fetch(
-    `https://graph.facebook.com/v19.0/${accountId}/media_publish`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        creation_id: containerId,
-        access_token: accessToken,
-      }),
-    },
-  );
-
-  if (!publishRes.ok) {
-    const err = await publishRes.text();
-    console.error('[social-post] Instagram publish error:', publishRes.status, err);
-    return null;
-  }
-
-  const { id: postId } = await publishRes.json();
-  return postId ?? null;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // Supabase ログ保存
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -298,8 +265,6 @@ export async function POST(request: NextRequest) {
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
-  // CRON_SECRET が設定されている場合のみトークン照合する
-  // 未設定の場合は管理画面からの手動実行を許可する
   if (process.env.NODE_ENV !== 'development') {
     if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -314,12 +279,11 @@ export async function POST(request: NextRequest) {
 
   // ── コンテンツ選択 ────────────────────────────────────────────────────────
   const marketingSet = getTodayMarketingSet();
-  const faceTypeId = marketingSet.id; // DB保存用の識別子として利用
+  const faceTypeId = marketingSet.id;
 
-  // 時間帯別テンプレートを使うか、通常セットのテンプレートを使うか
   const useTimeTemplate = marketingSet.id === 'ui_mockup' && Math.random() < 0.5;
   const timeTemplates = X_TIME_TEMPLATES[timeSlot];
-  
+
   let rawXText = '';
   if (useTimeTemplate && timeTemplates?.length) {
     rawXText = timeTemplates[Math.floor(Math.random() * timeTemplates.length)];
@@ -327,74 +291,85 @@ export async function POST(request: NextRequest) {
     rawXText = marketingSet.templates[Math.floor(Math.random() * marketingSet.templates.length)];
   }
   rawXText = fillTemplate(rawXText, { URL: SITE_URL });
-  
+
   const xText = truncateForX(rawXText);
-  const igCaption = pickInstagramTemplate();
 
   results.faceTypeId = faceTypeId;
   results.timeSlot = timeSlot;
   results.xTextLength = xText.length;
 
-  // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
+  // ── 画像選択 ────────────────────────────────────────────────────────────
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
+  const extSet = marketingSet as typeof marketingSet & { searchKeyword?: string; cardTag?: string };
+  const keyword = extSet.searchKeyword;
+  const cardTag = extSet.cardTag ?? 'AI提案';
 
-  // ① コンテンツマッチ画像: searchKeyword でFANZA検索し「#ギャル → ギャル系パッケ」を確実に取得
+  // ① コンテンツ画像: FANZA で女優名を取得 → ActressSearch でプロフィール写真を取得
+  //    投稿テキストの女優タイプ（清楚/ギャル/クール等）と画像を確実に一致させる
   let contentImageUrl: string = `${baseUrl}/post-images/${marketingSet.imageFile}`;
   let actressNameForCard = '';
+
   try {
     const { fetchVideosByTypeIds } = await import('@/lib/fanza/api');
-    const keyword = (marketingSet as typeof marketingSet & { searchKeyword?: string }).searchKeyword;
     const { videos } = await fetchVideosByTypeIds(
       [marketingSet.faceTypeId],
       { limit: 10, keyword },
     );
     if (videos.length > 0) {
       const pick = videos[Math.floor(Math.random() * videos.length)];
-      if (pick.thumbnailUrl) contentImageUrl = pick.thumbnailUrl;
-      // actress は "田中美咲・鈴木あい" のような文字列。最初の名前だけ取り出す
       if (pick.actress) actressNameForCard = pick.actress.split(/[・、,，]/)[0].trim();
     }
   } catch (err) {
-    console.warn('[social-post] Failed to fetch FANZA content image, using fallback:', err);
+    console.warn('[social-post] Failed to fetch actress name from FANZA:', err);
   }
 
-  // ② アプリUI説明画像: generate-marketing-image API でスマホモックアップを動的生成
-  //    女優画像をカード内に埋め込み、見た人が使いたくなるビジュアルを生成
-  let uiMockupImageUrl: string | null = null;
-  try {
-    const cardTag = (marketingSet as typeof marketingSet & { cardTag?: string }).cardTag ?? 'AI提案';
-    const mockupParams = new URLSearchParams({ liked: 'true', tag: cardTag });
-    // FANZAサムネイルをカード内画像として使用（ローカル静的ファイル以外の場合）
-    if (!contentImageUrl.includes('/post-images/')) {
-      mockupParams.set('imageUrl', contentImageUrl);
+  // ActressSearch でプロフィール写真を取得（動画サムネイルより一貫性が高い）
+  if (actressNameForCard) {
+    try {
+      const profileUrl = await fetchActressProfileImage(actressNameForCard);
+      if (profileUrl) {
+        contentImageUrl = profileUrl;
+        console.log(`[social-post] Using actress profile photo for "${actressNameForCard}": ${profileUrl.slice(0, 80)}`);
+      } else {
+        console.warn(`[social-post] No profile photo found for "${actressNameForCard}", using fallback`);
+      }
+    } catch (err) {
+      console.warn('[social-post] fetchActressProfileImage error:', err);
     }
-    if (actressNameForCard) mockupParams.set('name', actressNameForCard);
-    uiMockupImageUrl = `${baseUrl}/api/generate-marketing-image?${mockupParams}`;
-  } catch (err) {
-    console.warn('[social-post] Failed to build marketing image URL:', err);
   }
 
-  // 投稿に添付: [コンテンツ画像, スマホUIモックアップ] の順で最大2枚
-  const imagesToUpload: string[] = [contentImageUrl];
-  if (uiMockupImageUrl) imagesToUpload.push(uiMockupImageUrl);
+  // ② スマホモックアップ画像: generate-marketing-image で動的生成
+  //    女優プロフィール写真をカード内に埋め込み、使いたくなるビジュアルを生成
+  const mockupParams = new URLSearchParams({ liked: 'true', tag: cardTag });
+  // 静的フォールバック画像以外ならカード内画像として渡す
+  if (!contentImageUrl.includes('/post-images/')) {
+    mockupParams.set('imageUrl', contentImageUrl);
+  }
+  if (actressNameForCard) mockupParams.set('name', actressNameForCard);
+  const uiMockupImageUrl = `${baseUrl}/api/generate-marketing-image?${mockupParams}`;
 
+  results.contentImageUrl = contentImageUrl.slice(0, 100);
+  results.actressName = actressNameForCard;
+
+  // ── 画像アップロード ────────────────────────────────────────────────────
   const uploadedMediaIds: string[] = [];
-  for (const url of imagesToUpload) {
+  for (const url of [contentImageUrl, uiMockupImageUrl]) {
     try {
       const mediaId = await uploadImageToX(url);
       if (mediaId) uploadedMediaIds.push(mediaId);
+      else console.warn('[social-post] uploadImageToX returned null for:', url.slice(0, 100));
     } catch (err) {
-      console.warn(`[social-post] Image upload failed for ${url}:`, err);
+      console.warn('[social-post] Image upload failed for', url.slice(0, 100), ':', err);
     }
   }
 
-  results.xMediaIds = uploadedMediaIds.length > 0 ? uploadedMediaIds : 'skipped';
+  results.uploadedMediaIds = uploadedMediaIds.length > 0 ? uploadedMediaIds : 'none';
 
   // ── X 投稿 ───────────────────────────────────────────────────────────────
   try {
     const xResult = await postToX(xText, uploadedMediaIds);
     if (xResult && 'id' in xResult) {
-      results.x = { status: 'posted', postId: xResult.id, hasImage: uploadedMediaIds.length > 0 };
+      results.x = { status: 'posted', postId: xResult.id, images: uploadedMediaIds.length };
       await logPost({ platform: 'x', content: xText, post_id: xResult.id, status: 'posted', face_type_id: faceTypeId });
     } else {
       const errMsg = xResult && 'error' in xResult ? xResult.error : 'unknown error';
@@ -405,25 +380,6 @@ export async function POST(request: NextRequest) {
     console.error('[social-post] X error:', err);
     results.x = { status: 'error', error: String(err) };
     await logPost({ platform: 'x', content: xText, post_id: null, status: 'failed', face_type_id: faceTypeId });
-  }
-
-  // ── Instagram 投稿 ───────────────────────────────────────────────────────
-  let igPostId: string | null = null;
-  try {
-    igPostId = await postToInstagram(igCaption);
-    const status = igPostId ? 'posted' : 'skipped';
-    results.instagram = { status, postId: igPostId };
-    await logPost({
-      platform: 'instagram',
-      content: igCaption,
-      post_id: igPostId,
-      status: igPostId ? 'posted' : 'skipped',
-      face_type_id: faceTypeId,
-    });
-  } catch (err) {
-    console.error('[social-post] Instagram error:', err);
-    results.instagram = { status: 'error', error: String(err) };
-    await logPost({ platform: 'instagram', content: igCaption, post_id: null, status: 'failed', face_type_id: faceTypeId });
   }
 
   results.completedAt = new Date().toISOString();
