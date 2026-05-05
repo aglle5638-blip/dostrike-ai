@@ -622,21 +622,37 @@ export default function DashboardPage() {
 
   const handleDeleteActress = async (actressId: string) => {
     if (!session?.access_token) return;
-    // 存在確認して楽観的UI更新（両方のstateを同時更新）
-    const exists = preferenceAnalysis?.topActresses.some(a => a.actress_id === actressId);
+    // 存在確認
+    const exists = preferenceAnalysis?.topActresses.some(a => String(a.actress_id) === String(actressId));
     if (!exists) return;
+
+    // 楽観的UI更新（アイコン即時消去、カウント-1）
     setPreferenceAnalysis(prev => {
       if (!prev) return prev;
-      const filtered = prev.topActresses.filter(a => a.actress_id !== actressId);
+      const filtered = prev.topActresses.filter(a => String(a.actress_id) !== String(actressId));
       return { ...prev, topActresses: filtered, count: Math.max(0, prev.count - 1) };
     });
     setPreferenceCount(prev => Math.max(0, (prev ?? 1) - 1));
-    // API削除
+
+    const token = session.access_token;
     try {
       await fetch(`/api/actress/preferences?actress_id=${encodeURIComponent(actressId)}`, {
         method: 'DELETE',
-        headers: { Authorization: `Bearer ${session.access_token}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
+    } catch { /* サイレント */ }
+
+    // DB削除後にカウントを再取得して確実に同期（楽観更新との差異を修正）
+    try {
+      const r = await fetch('/api/actress/preferences/count', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const d = await r.json() as { count: number };
+      const realCount = d.count ?? 0;
+      setPreferenceCount(realCount);
+      if (realCount === 0) {
+        setPreferenceAnalysis(prev => prev ? { ...prev, topActresses: [] } : null);
+      }
     } catch { /* サイレント */ }
   };
 
@@ -1242,22 +1258,50 @@ export default function DashboardPage() {
         <span className="text-[10px] text-foreground/50 uppercase tracking-widest font-bold">Sponsored & Premium</span>
       </div>
       <div className="flex gap-2.5 overflow-x-auto no-scrollbar snap-x pb-2 w-full px-1">
-         
-         {/* Ads */}
-         {AFFILIATE_ADS.map((ad, index) => {
-            const adImgId = AD_IMAGES[ad.imgIndex % AD_IMAGES.length];
-            return (
-              <div key={index} className="snap-start flex-shrink-0 w-[180px] relative rounded-xl overflow-hidden aspect-[2/1] border border-border shadow-sm">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={`https://images.unsplash.com/photo-${adImgId}?w=300&h=150&fit=crop&q=80`} alt="ad" className="absolute inset-0 w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+
+        {/* FANZAランキング動画サムネイルを広告として表示（adVideosロード済みの場合） */}
+        {adVideos.length > 0
+          ? AFFILIATE_ADS.map((ad, index) => {
+              const adVideo = adVideos[ad.imgIndex % adVideos.length];
+              return (
+                <a
+                  key={index}
+                  href={adVideo ? adVideo.affiliateUrl : ad.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="snap-start flex-shrink-0 w-[180px] relative rounded-xl overflow-hidden aspect-[2/1] border border-border shadow-sm"
+                >
+                  {adVideo ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
+                    <img src={adVideo.thumbnailUrl} alt={adVideo.title} className="absolute inset-0 w-full h-full object-cover" />
+                  ) : (
+                    <div className="absolute inset-0 bg-secondary/60 animate-pulse" />
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+                  <div className="absolute bottom-2 left-2 right-2 text-white z-10 flex flex-col items-start">
+                    <span className={`${ad.color} px-1.5 py-0.5 rounded shadow-sm text-[9px] font-extrabold mb-1`}>{ad.label}</span>
+                    <div className="font-bold text-[11px] line-clamp-1 leading-snug">{ad.title}</div>
+                  </div>
+                </a>
+              );
+            })
+          /* adVideosロード中はスケルトン表示 */
+          : AFFILIATE_ADS.map((ad, index) => (
+              <a
+                key={index}
+                href={ad.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="snap-start flex-shrink-0 w-[180px] relative rounded-xl overflow-hidden aspect-[2/1] border border-border shadow-sm bg-secondary/40 animate-pulse"
+              >
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                 <div className="absolute bottom-2 left-2 right-2 text-white z-10 flex flex-col items-start">
                   <span className={`${ad.color} px-1.5 py-0.5 rounded shadow-sm text-[9px] font-extrabold mb-1`}>{ad.label}</span>
                   <div className="font-bold text-[11px] line-clamp-1 leading-snug">{ad.title}</div>
                 </div>
-              </div>
-            );
-         })}
+              </a>
+            ))
+        }
       </div>
     </div>
   );

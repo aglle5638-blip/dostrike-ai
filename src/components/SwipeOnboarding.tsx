@@ -412,7 +412,9 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
             style={{ transform: 'scale(0.94) translateY(16px)', zIndex: 0 }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={next.imageUrl} alt={next.name} className="w-full h-full object-cover" />
+            <img src={next.imageUrl} alt={next.name} className="absolute inset-0 w-full h-full object-cover scale-110 blur-lg opacity-70" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={next.imageUrl} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
             <div className="absolute inset-0 bg-black/20" />
           </div>
         )}
@@ -434,14 +436,23 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
+          {/* ブラーバックドロップ：同じ画像をぼかして背景に敷き、メインは object-contain で自然サイズを維持 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={current.imageUrl}
+            alt=""
+            aria-hidden
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-75 pointer-events-none"
+            draggable={false}
+          />
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={current.imageUrl}
             alt={current.name}
-            className="w-full h-full object-cover pointer-events-none"
+            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
             draggable={false}
           />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />
 
           <div className="absolute top-8 left-6 border-4 border-primary rounded-xl px-4 py-2 rotate-[-15deg]" style={{ opacity: likeAlpha }}>
             <span className="text-primary font-extrabold text-2xl tracking-widest">LIKE ❤️</span>
