@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { MARKETING_SETS, fillTemplate, SITE_URL } from '@/lib/social-templates';
+import { MARKETING_SETS, fillTemplate, pickReplyText, SITE_URL } from '@/lib/social-templates';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -59,7 +59,9 @@ export async function GET(request: NextRequest) {
       const mockupImageUrl = `${baseUrl}/api/generate-marketing-image?${mockupParams}`;
 
       // ── テンプレートテキスト ─────────────────────────────────────────
+      // テンプレートに {URL} は含まれていないが、fillTemplate は互換のために残す
       const templates = set.templates.map(t => fillTemplate(t, { URL: SITE_URL }));
+      const replyText = pickReplyText(dayIndex);
 
       previewData.push({
         id: set.id,
@@ -70,6 +72,7 @@ export async function GET(request: NextRequest) {
         mockupImageUrl,
         templates,
         todayTemplate: templates[dayIndex % templates.length],
+        replyText,           // ② リプライ投稿テキスト（URLのみ）
         actressName,
       });
     }

@@ -1,15 +1,11 @@
 /**
  * POST /api/cron/social-post
  *
- * Vercel Cron（JST 8:00 / 12:00 / 21:00）から呼ばれる自動投稿エンドポイント。
- * 実行内容:
- *   1. 今日のマーケティングセットを取得（22種類を日別ローテーション）
- *   2. searchKeyword で FANZA 動画を検索 → パッケージ画像を取得
- *      - テキスト内容（清楚系/ギャル系/etc.）と動画パッケ画が確実に一致
- *   3. X (Twitter) API v2 でテキスト+画像投稿
- *      - 画像①: FANZAパッケ画（テキストと同一キーワードで検索）
- *      - 画像②: generate-marketing-image でスマホモックアップを動的生成
- *   4. Supabase の social_posts テーブルに投稿ログを記録
+ * X (Twitter) 2段階投稿戦略:
+ *   投稿① メイン: テキスト + 画像 2枚（URL なし）→ 低コスト
+ *   投稿② リプライ: ①にぶら下げる形でサイトURL のみ投稿
+ *
+ * Vercel Cron（JST 8:00 / 12:00 / 21:00）から呼ばれる。
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,19 +13,14 @@ import crypto from 'crypto';
 import { createServiceClient } from '@/lib/supabase/server';
 import {
   getTodayMarketingSet,
-  fillTemplate,
+  pickReplyText,
   truncateForX,
-  SITE_URL,
 } from '@/lib/social-templates';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// X 画像アップロード (multipart/form-data)
+// X 画像アップロード (multipart/form-data + raw binary)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * 画像URLを取得して X Media Upload API (v1.1) にアップロードする。
- * multipart/form-data + raw binary を使用（URLSearchParams base64の二重エンコード問題を回避）。
- */
 async function uploadImageToX(imageUrl: string): Promise<string | null> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
@@ -60,7 +51,6 @@ async function uploadImageToX(imageUrl: string): Promise<string | null> {
       oauth_token: accessToken,
       oauth_version: '1.0',
     };
-    // multipart/form-data: ボディは OAuth シグネチャに含めない
     const authHeader = buildOAuthHeader(uploadMethod, uploadUrl, {}, oauthParams);
 
     const form = new FormData();
@@ -125,13 +115,17 @@ function buildOAuthHeader(
   return `OAuth ${headerStr}`;
 }
 
+/**
+ * X API v2 でツイートを投稿する。
+ * @param replyToId 指定した場合、そのツイートへのリプライとして投稿する
+ */
 async function postToX(
   text: string,
   mediaIds?: string[],
+  replyToId?: string,
 ): Promise<{ id: string } | { error: string }> {
   const apiKey = process.env.TWITTER_API_KEY;
   const accessToken = process.env.TWITTER_ACCESS_TOKEN;
-
   if (!apiKey || !accessToken) {
     return { error: 'Twitter credentials not configured' };
   }
@@ -151,8 +145,14 @@ async function postToX(
   };
 
   const authHeader = buildOAuthHeader(method, url, {}, oauthParams);
+
   const payload: Record<string, unknown> = { text };
-  if (mediaIds && mediaIds.length > 0) payload.media = { media_ids: mediaIds };
+  if (mediaIds && mediaIds.length > 0) {
+    payload.media = { media_ids: mediaIds };
+  }
+  if (replyToId) {
+    payload.reply = { in_reply_to_tweet_id: replyToId };
+  }
 
   const res = await fetch(url, {
     method,
@@ -212,18 +212,19 @@ export async function POST(request: NextRequest) {
   const results: Record<string, unknown> = { startedAt: new Date().toISOString() };
 
   // ── マーケティングセット選択（22種類を日別ローテーション）─────────────────
+  const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
   const marketingSet = getTodayMarketingSet();
   const faceTypeId = marketingSet.id;
   const extSet = marketingSet as typeof marketingSet & { searchKeyword?: string; cardTag?: string };
   const searchKeyword = extSet.searchKeyword;
   const cardTag = extSet.cardTag ?? 'AI提案';
 
-  // テンプレートをランダムに選択
-  const rawXText = fillTemplate(
+  // ① メイン投稿テキスト（URL なし）
+  const mainText = truncateForX(
     marketingSet.templates[Math.floor(Math.random() * marketingSet.templates.length)],
-    { URL: SITE_URL },
   );
-  const xText = truncateForX(rawXText);
+  // ② リプライテキスト（URL のみ）
+  const replyText = pickReplyText(dayIndex);
 
   results.setId = faceTypeId;
   results.label = marketingSet.label;
@@ -232,9 +233,7 @@ export async function POST(request: NextRequest) {
   // ── 画像選択 ────────────────────────────────────────────────────────────
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
 
-  // ① FANZAパッケ画: searchKeyword と完全一致したキーワードで検索
-  //    「清楚系」テキスト → keyword:'清楚' → FANZAの清楚系パッケ画
-  //    「ギャル系」テキスト → keyword:'ギャル' → FANZAのギャル系パッケ画
+  // ① FANZAパッケ画（searchKeyword でテキストと完全一致）
   let contentImageUrl: string = `${baseUrl}/post-images/${marketingSet.imageFile}`;
   let actressNameForCard = '';
 
@@ -258,7 +257,7 @@ export async function POST(request: NextRequest) {
     console.warn('[social-post] FANZA fetch failed, using fallback:', err);
   }
 
-  // ② スマホモックアップ: generate-marketing-image でパッケ画をUI内に組み込む
+  // ② スマホモックアップ（generate-marketing-image）
   const mockupParams = new URLSearchParams({ liked: 'true', tag: cardTag });
   if (!contentImageUrl.includes('/post-images/')) {
     mockupParams.set('imageUrl', contentImageUrl);
@@ -274,24 +273,62 @@ export async function POST(request: NextRequest) {
   for (const url of [contentImageUrl, uiMockupImageUrl]) {
     const mediaId = await uploadImageToX(url);
     if (mediaId) uploadedMediaIds.push(mediaId);
-    else console.warn('[social-post] Upload returned null for:', url.slice(0, 100));
+    else console.warn('[social-post] Upload null for:', url.slice(0, 100));
   }
   results.uploadedMediaIds = uploadedMediaIds.length > 0 ? uploadedMediaIds : 'none';
 
-  // ── X 投稿 ───────────────────────────────────────────────────────────────
+  // ── 投稿① メイン（テキスト + 画像、URL なし）────────────────────────────
+  let mainPostId: string | null = null;
   try {
-    const xResult = await postToX(xText, uploadedMediaIds);
+    const xResult = await postToX(mainText, uploadedMediaIds);
     if ('id' in xResult) {
-      results.x = { status: 'posted', postId: xResult.id, images: uploadedMediaIds.length };
-      await logPost({ platform: 'x', content: xText, post_id: xResult.id, status: 'posted', face_type_id: faceTypeId });
+      mainPostId = xResult.id;
+      results.x_main = { status: 'posted', postId: mainPostId, images: uploadedMediaIds.length };
+      await logPost({
+        platform: 'x',
+        content: mainText,
+        post_id: mainPostId,
+        status: 'posted',
+        face_type_id: faceTypeId,
+      });
+      console.log('[social-post] Main tweet posted:', mainPostId);
     } else {
-      results.x = { status: 'failed', error: xResult.error };
-      await logPost({ platform: 'x', content: xText, post_id: null, status: 'failed', face_type_id: faceTypeId });
+      results.x_main = { status: 'failed', error: xResult.error };
+      await logPost({ platform: 'x', content: mainText, post_id: null, status: 'failed', face_type_id: faceTypeId });
     }
   } catch (err) {
-    console.error('[social-post] X post error:', err);
-    results.x = { status: 'error', error: String(err) };
-    await logPost({ platform: 'x', content: xText, post_id: null, status: 'failed', face_type_id: faceTypeId });
+    console.error('[social-post] Main tweet error:', err);
+    results.x_main = { status: 'error', error: String(err) };
+    await logPost({ platform: 'x', content: mainText, post_id: null, status: 'failed', face_type_id: faceTypeId });
+  }
+
+  // ── 投稿② リプライ（URL のみ、メイン投稿にぶら下げ）────────────────────
+  if (mainPostId) {
+    try {
+      // メイン投稿直後に少し待機（リプライの前に投稿が確定するまで）
+      await new Promise(r => setTimeout(r, 2000));
+
+      const replyResult = await postToX(replyText, undefined, mainPostId);
+      if ('id' in replyResult) {
+        results.x_reply = { status: 'posted', postId: replyResult.id, replyTo: mainPostId };
+        await logPost({
+          platform: 'x',
+          content: replyText,
+          post_id: replyResult.id,
+          status: 'posted',
+          face_type_id: `${faceTypeId}_reply`,
+        });
+        console.log('[social-post] Reply tweet posted:', replyResult.id);
+      } else {
+        results.x_reply = { status: 'failed', error: replyResult.error };
+        await logPost({ platform: 'x', content: replyText, post_id: null, status: 'failed', face_type_id: `${faceTypeId}_reply` });
+      }
+    } catch (err) {
+      console.error('[social-post] Reply tweet error:', err);
+      results.x_reply = { status: 'error', error: String(err) };
+    }
+  } else {
+    results.x_reply = { status: 'skipped', reason: 'main tweet failed' };
   }
 
   results.completedAt = new Date().toISOString();
