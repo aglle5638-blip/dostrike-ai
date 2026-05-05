@@ -78,7 +78,8 @@ export async function GET(req: NextRequest) {
     try {
       type DBRow = { id: string; name: string; image_url: string; tags: string[]; bust: number | null; height: number | null };
 
-      /** DB から指定条件で取得する汎用ヘルパー */
+      /** DB から指定条件で取得する汎用ヘルパー
+       *  age フィルターあり: age_group（実データ）OR estimated_age_group（AI推定）の両方を対象にする */
       const dbQuery = async (body: string, age: string): Promise<DBRow[]> => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         let q: any = supabase!
@@ -86,7 +87,10 @@ export async function GET(req: NextRequest) {
           .select('id, name, image_url, tags, bust, height')
           .not('image_url', 'is', null);
         if (body !== 'all') q = q.eq('body_type', body);
-        if (age  !== 'all') q = q.eq('age_group',  age);
+        if (age  !== 'all') {
+          // 実年齢データ OR AI推定年齢 のどちらかが一致する女優を返す
+          q = q.or(`age_group.eq.${age},estimated_age_group.eq.${age}`);
+        }
         const { data, error } = await q.limit(400);
         if (error || !data) return [];
         return data as DBRow[];
