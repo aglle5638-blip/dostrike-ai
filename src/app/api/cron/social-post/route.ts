@@ -337,40 +337,52 @@ export async function POST(request: NextRequest) {
 
   // ── X 投稿用画像を選択・アップロード ────────────────────────────────────
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dostrike-ai.vercel.app';
-  
-  let mainImageUrl = `${baseUrl}/post-images/${marketingSet.imageFile}`;
-  
-  if (marketingSet.id !== 'ui_mockup') {
-    try {
-      const { fetchVideosByTypeIds } = await import('@/lib/fanza/api');
-      const { videos } = await fetchVideosByTypeIds([marketingSet.faceTypeId], { limit: 5 });
-      // ランダムに1つ選ぶ（毎回同じにならないように）
-      if (videos.length > 0) {
-        const randomVideo = videos[Math.floor(Math.random() * videos.length)];
-        if (randomVideo.thumbnailUrl) {
-          mainImageUrl = randomVideo.thumbnailUrl;
-        }
-      }
-    } catch (err) {
-      console.warn('[social-post] Failed to fetch FANZA video thumbnail, falling back to local image:', err);
+
+  // ① コンテンツマッチ画像: searchKeyword でFANZA検索し「#ギャル → ギャル系パッケ」を確実に取得
+  let contentImageUrl: string = `${baseUrl}/post-images/${marketingSet.imageFile}`;
+  let actressNameForCard = '';
+  try {
+    const { fetchVideosByTypeIds } = await import('@/lib/fanza/api');
+    const keyword = (marketingSet as typeof marketingSet & { searchKeyword?: string }).searchKeyword;
+    const { videos } = await fetchVideosByTypeIds(
+      [marketingSet.faceTypeId],
+      { limit: 10, keyword },
+    );
+    if (videos.length > 0) {
+      const pick = videos[Math.floor(Math.random() * videos.length)];
+      if (pick.thumbnailUrl) contentImageUrl = pick.thumbnailUrl;
+      // actress は "田中美咲・鈴木あい" のような文字列。最初の名前だけ取り出す
+      if (pick.actress) actressNameForCard = pick.actress.split(/[・、,，]/)[0].trim();
     }
+  } catch (err) {
+    console.warn('[social-post] Failed to fetch FANZA content image, using fallback:', err);
   }
 
-  // 投稿に添付する画像のリスト（メイン画像 + UIモックアップ）
-  const imagesToUpload = [mainImageUrl];
-  
-  // もしメイン画像が app_ui.png でなければ、app_ui.png も追加して両方投稿する
-  if (marketingSet.imageFile !== 'app_ui.png') {
-    imagesToUpload.push(`${baseUrl}/post-images/app_ui.png`);
+  // ② アプリUI説明画像: generate-marketing-image API でスマホモックアップを動的生成
+  //    女優画像をカード内に埋め込み、見た人が使いたくなるビジュアルを生成
+  let uiMockupImageUrl: string | null = null;
+  try {
+    const cardTag = (marketingSet as typeof marketingSet & { cardTag?: string }).cardTag ?? 'AI提案';
+    const mockupParams = new URLSearchParams({ liked: 'true', tag: cardTag });
+    // FANZAサムネイルをカード内画像として使用（ローカル静的ファイル以外の場合）
+    if (!contentImageUrl.includes('/post-images/')) {
+      mockupParams.set('imageUrl', contentImageUrl);
+    }
+    if (actressNameForCard) mockupParams.set('name', actressNameForCard);
+    uiMockupImageUrl = `${baseUrl}/api/generate-marketing-image?${mockupParams}`;
+  } catch (err) {
+    console.warn('[social-post] Failed to build marketing image URL:', err);
   }
+
+  // 投稿に添付: [コンテンツ画像, スマホUIモックアップ] の順で最大2枚
+  const imagesToUpload: string[] = [contentImageUrl];
+  if (uiMockupImageUrl) imagesToUpload.push(uiMockupImageUrl);
 
   const uploadedMediaIds: string[] = [];
   for (const url of imagesToUpload) {
     try {
       const mediaId = await uploadImageToX(url);
-      if (mediaId) {
-        uploadedMediaIds.push(mediaId);
-      }
+      if (mediaId) uploadedMediaIds.push(mediaId);
     } catch (err) {
       console.warn(`[social-post] Image upload failed for ${url}:`, err);
     }

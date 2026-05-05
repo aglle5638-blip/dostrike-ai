@@ -164,12 +164,19 @@ export async function GET(req: NextRequest) {
     const serviceClient = createServiceClient();
     if (!serviceClient) return NextResponse.json({ error: 'Supabase unavailable' }, { status: 503 });
 
-    const { data: prefs, error } = await serviceClient
-      .from('user_actress_preferences')
-      .select('actress_id, actress_name, image_url, tags, score')
-      .eq('user_id', user.id)
-      .order('score', { ascending: false })
-      .limit(10);
+    // 実際の総登録数をカウントクエリで取得（limit の影響を受けない）
+    const [{ count: totalCount }, { data: prefs, error }] = await Promise.all([
+      serviceClient
+        .from('user_actress_preferences')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', user.id),
+      serviceClient
+        .from('user_actress_preferences')
+        .select('actress_id, actress_name, image_url, tags, score')
+        .eq('user_id', user.id)
+        .order('score', { ascending: false })
+        .limit(50),   // 表示用に上位50件取得（UI側で6+overflow表示）
+    ]);
 
     if (error) throw error;
 
@@ -181,9 +188,7 @@ export async function GET(req: NextRequest) {
       score:        p.score as number,
     }));
 
-    const count = topActresses.length;
-
-    // image_url が null の女優を並列で補完
+    // image_url が null の女優を並列で補完（表示上位6件のみ）
     const needsImage = topActresses.filter(a => !a.image_url).slice(0, 6);
     if (needsImage.length > 0) {
       const imageResults = await Promise.allSettled(needsImage.map(a => fetchActressImageByName(a.actress_name)));
@@ -201,12 +206,12 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Gemini で5つの特徴を生成
+    // Gemini で5つの特徴を生成（上位6件を使用）
     const { summary, characteristics } = await generateAnalysisWithGemini(topActresses.slice(0, 6));
 
     return NextResponse.json({
-      count,
-      topActresses: topActresses.slice(0, 6),
+      count: totalCount ?? topActresses.length,  // DB上の真の総数
+      topActresses,                               // 上位50件（UI側でslice表示）
       analysisText: summary,
       characteristics,
     });

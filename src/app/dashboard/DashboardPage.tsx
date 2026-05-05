@@ -190,7 +190,7 @@ export default function DashboardPage() {
   // スワイプオンボーディング（好み未設定ユーザーに表示）
   const [showSwipeOnboarding, setShowSwipeOnboarding] = useState(false);
   const [hasCheckedPreferences, setHasCheckedPreferences] = useState(false);
-  // スワイプ済み女優数（null = 未取得）
+  // 好み登録済み女優数（null = 未取得）
   const [preferenceCount, setPreferenceCount] = useState<number | null>(null);
   // 好み分析結果
   type PreferenceAnalysis = {
@@ -200,6 +200,8 @@ export default function DashboardPage() {
     characteristics: string[];
   };
   const [preferenceAnalysis, setPreferenceAnalysis] = useState<PreferenceAnalysis | null>(null);
+  // 女優アイコン展開表示
+  const [showAllActresses, setShowAllActresses] = useState(false);
   // パーソナライズ動画（Route 0: user_actress_preferences）
   const [personalVideos, setPersonalVideos] = useState<VideoResult[]>([]);
   const [isLoadingPersonalVideos, setIsLoadingPersonalVideos] = useState(false);
@@ -885,41 +887,67 @@ export default function DashboardPage() {
               )}
 
               {/* 好み女優グリッド（丸アイコン → FANZAアフィリエイトリンク） */}
-              {preferenceAnalysis && preferenceAnalysis.topActresses.length > 0 && (
-                <div>
-                  <p className="text-[10px] font-bold text-foreground/40 mb-2.5">あなたが好きな女優</p>
-                  <div className="flex gap-3 md:gap-4 flex-wrap">
-                    {preferenceAnalysis.topActresses.slice(0, 6).map(a => {
-                      const fanzaUrl = `https://al.dmm.co.jp/?lurl=${encodeURIComponent(`https://www.dmm.co.jp/digital/videoa/-/list/=/article=actress/id=${a.actress_id}/`)}&af_id=dostrikeai-990&ch=actress_pref`;
-                      return (
-                        <div key={a.actress_id} className="relative flex flex-col items-center gap-1.5 w-[4rem] md:w-[4.5rem]">
-                          <a href={fanzaUrl} target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-1.5 w-full">
-                            <div className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden border-2 border-border/60 group-hover:border-primary transition-all shadow-md relative flex-shrink-0">
-                              {a.image_url ? (
-                                /* eslint-disable-next-line @next/next/no-img-element */
-                                <img src={a.image_url} alt={a.actress_name} className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300" />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
-                                  <span className="text-lg font-extrabold text-primary/50">{a.actress_name.charAt(0)}</span>
-                                </div>
-                              )}
-                            </div>
-                            <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2 w-full">{a.actress_name}</span>
-                          </a>
-                          {/* 削除ボタン */}
-                          <button
-                            onClick={() => handleDeleteActress(a.actress_id)}
-                            className="absolute -top-0.5 -right-0.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-md z-10"
-                            aria-label="好みから削除"
-                          >
-                            <X className="w-2.5 h-2.5 md:w-3 md:h-3" />
-                          </button>
-                        </div>
-                      );
-                    })}
+              {preferenceAnalysis && preferenceAnalysis.topActresses.length > 0 && (() => {
+                const all = preferenceAnalysis.topActresses;
+                const VISIBLE = 6;
+                const displayed = showAllActresses ? all : all.slice(0, VISIBLE);
+                const overflowCount = all.length - VISIBLE;
+                return (
+                  <div>
+                    <p className="text-[10px] font-bold text-foreground/40 mb-2.5">あなたが好きな女優（上位）</p>
+                    <div className="flex gap-3 md:gap-4 flex-wrap">
+                      {displayed.map(a => {
+                        const fanzaUrl = `https://al.dmm.co.jp/?lurl=${encodeURIComponent(`https://www.dmm.co.jp/digital/videoa/-/list/=/article=actress/id=${a.actress_id}/`)}&af_id=dostrikeai-990&ch=actress_pref`;
+                        return (
+                          <div key={a.actress_id} className="relative flex flex-col items-center gap-1.5 w-[4rem] md:w-[4.5rem]">
+                            <a href={fanzaUrl} target="_blank" rel="noopener noreferrer" className="group flex flex-col items-center gap-1.5 w-full">
+                              <div className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full overflow-hidden border-2 border-border/60 group-hover:border-primary transition-all shadow-md relative flex-shrink-0">
+                                {a.image_url ? (
+                                  /* eslint-disable-next-line @next/next/no-img-element */
+                                  <img src={a.image_url} alt={a.actress_name} className="w-full h-full object-cover object-top group-hover:scale-110 transition-transform duration-300" />
+                                ) : (
+                                  <div className="w-full h-full bg-gradient-to-br from-primary/20 to-primary/5 flex items-center justify-center">
+                                    <span className="text-lg font-extrabold text-primary/50">{a.actress_name.charAt(0)}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <span className="text-[9px] font-bold text-foreground/60 text-center leading-tight line-clamp-2 w-full">{a.actress_name}</span>
+                            </a>
+                            {/* 削除ボタン */}
+                            <button
+                              onClick={() => handleDeleteActress(a.actress_id)}
+                              className="absolute -top-0.5 -right-0.5 w-4 h-4 md:w-5 md:h-5 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-md z-10"
+                              aria-label="好みから削除"
+                            >
+                              <X className="w-2.5 h-2.5 md:w-3 md:h-3" />
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {/* 折りたたみ時の +N チップ */}
+                      {!showAllActresses && overflowCount > 0 && (
+                        <button
+                          onClick={() => setShowAllActresses(true)}
+                          className="w-[4rem] h-[4rem] md:w-[4.5rem] md:h-[4.5rem] rounded-full border-2 border-dashed border-primary/40 bg-primary/5 hover:bg-primary/10 transition-colors flex flex-col items-center justify-center gap-0.5 flex-shrink-0 self-start mt-0"
+                          aria-label={`他${overflowCount}人を表示`}
+                        >
+                          <span className="text-sm font-extrabold text-primary leading-none">+{overflowCount}</span>
+                          <span className="text-[8px] font-bold text-primary/70 leading-none">もっと見る</span>
+                        </button>
+                      )}
+                    </div>
+                    {/* 展開中は「折りたたむ」リンク */}
+                    {showAllActresses && all.length > VISIBLE && (
+                      <button
+                        onClick={() => setShowAllActresses(false)}
+                        className="mt-2 text-[10px] font-bold text-foreground/40 underline hover:text-foreground/60"
+                      >
+                        折りたたむ
+                      </button>
+                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* 操作ボタン */}
               <div className="flex items-center gap-2 mt-1">
@@ -929,7 +957,7 @@ export default function DashboardPage() {
                 >
                   ＋ 追加スワイプ
                 </button>
-                <span className="text-[10px] text-foreground/30">{preferenceCount}人スワイプ済み</span>
+                <span className="text-[10px] text-foreground/30">{preferenceCount}人好み登録済み</span>
               </div>
             </div>
           )}

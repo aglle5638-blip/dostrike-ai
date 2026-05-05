@@ -18,6 +18,7 @@
 import { readFileSync } from 'fs';
 import { createClient } from '@supabase/supabase-js';
 import https from 'https';
+import http from 'http';
 
 // ── 環境変数読み込み ──────────────────────────────────────────────
 function loadEnv(path) {
@@ -53,8 +54,9 @@ function fetchImageAsBase64(url) {
   return new Promise((resolve, reject) => {
     const get = (u, depth = 0) => {
       if (depth > 3) return reject(new Error('Too many redirects'));
-      const mod = u.startsWith('https') ? https : (await import('http')).default;
-      const req = https.get(u, { timeout: 10000 }, (res) => {
+      // HTTP/HTTPS 両対応（FANZAの画像URLはhttpの場合がある）
+      const mod = u.startsWith('https://') ? https : http;
+      const req = mod.get(u, { timeout: 10000 }, (res) => {
         if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           return get(res.headers.location, depth + 1);
         }
@@ -108,7 +110,7 @@ async function estimateAgeFromImage(imageUrl) {
   };
 
   const body = JSON.stringify(payload);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
 
   return new Promise((resolve) => {
     const req = https.request(url, {
@@ -136,7 +138,8 @@ async function estimateAgeFromImage(imageUrl) {
 
 // ── メイン ────────────────────────────────────────────────────────
 const BATCH_UPDATE = 50;  // まとめてupdateするバッチサイズ
-const API_INTERVAL = 1000; // Geminiレート制限対策（1秒）
+const API_INTERVAL = 4000; // Geminiレート制限対策（4秒 = 15 RPM以内）
+const RETRY_WAIT   = 30000; // レート制限エラー時の待機時間（30秒）
 
 console.log('Supabase URL:', SUPABASE_URL);
 
@@ -147,15 +150,17 @@ const { data: targets, error: fetchErr } = await supabase
   .is('age_group', null)
   .is('estimated_age_group', null)
   .not('image_url', 'is', null)
-  .order('id');
+  .order('id')
+  .limit(10000);
 
 if (fetchErr) { console.error('Fetch error:', fetchErr.message); process.exit(1); }
 console.log(`対象女優数: ${targets.length}人`);
 
-let processed = 0;
-let succeeded = 0;
-let failed    = 0;
-const dist    = { '10代': 0, '20代': 0, '30代以上': 0, null: 0 };
+let processed       = 0;
+let succeeded       = 0;
+let failed          = 0;
+let consecutiveFail = 0;
+const dist          = { '10代': 0, '20代': 0, '30代以上': 0, null: 0 };
 
 for (const actress of targets) {
   processed++;
@@ -170,15 +175,24 @@ for (const actress of targets) {
     if (error) {
       console.error(`  UPDATE error for ${actress.name}: ${error.message}`);
       failed++;
+      consecutiveFail++;
     } else {
       succeeded++;
+      consecutiveFail = 0;
     }
   } else {
     failed++;
+    consecutiveFail++;
+    // 連続5回失敗 → レート制限とみなして30秒待機
+    if (consecutiveFail > 0 && consecutiveFail % 5 === 0) {
+      console.log(`  ⚠️ 連続${consecutiveFail}回失敗 → ${RETRY_WAIT/1000}秒待機中...`);
+      await sleep(RETRY_WAIT);
+    }
   }
 
   if (processed % 100 === 0) {
-    console.log(`進捗: ${processed}/${targets.length} | 成功=${succeeded} 失敗=${failed} | 分布:`, dist);
+    // process.stdout.write で即時フラッシュ（ファイルリダイレクト時のバッファリング対策）
+    process.stdout.write(`進捗: ${processed}/${targets.length} | 成功=${succeeded} 失敗=${failed} | 分布: ${JSON.stringify(dist)}\n`);
   }
 
   await sleep(API_INTERVAL);

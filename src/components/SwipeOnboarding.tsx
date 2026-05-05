@@ -412,9 +412,7 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
             style={{ transform: 'scale(0.94) translateY(16px)', zIndex: 0 }}
           >
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={next.imageUrl} alt={next.name} className="absolute inset-0 w-full h-full object-cover scale-110 blur-lg opacity-70" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={next.imageUrl} alt="" aria-hidden className="absolute inset-0 w-full h-full object-contain pointer-events-none" />
+            <img src={next.imageUrl} alt={next.name} className="absolute inset-0 w-full h-full object-cover opacity-80" style={{ objectPosition: 'center top' }} />
             <div className="absolute inset-0 bg-black/20" />
           </div>
         )}
@@ -436,20 +434,13 @@ export default function SwipeOnboarding({ onComplete, authToken }: Props) {
           onMouseUp={onMouseUp}
           onMouseLeave={onMouseUp}
         >
-          {/* ブラーバックドロップ：同じ画像をぼかして背景に敷き、メインは object-contain で自然サイズを維持 */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={current.imageUrl}
-            alt=""
-            aria-hidden
-            className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-75 pointer-events-none"
-            draggable={false}
-          />
+          {/* object-cover + object-position: center top で顔エリアを優先しながらカード全面を埋める */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={current.imageUrl}
             alt={current.name}
-            className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+            className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+            style={{ objectPosition: 'center top', filter: 'contrast(1.05) saturate(1.05)' }}
             draggable={false}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent" />

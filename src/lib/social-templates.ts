@@ -18,6 +18,10 @@ export const MARKETING_SETS = [
     faceTypeId: 'A1',
     imageFile: 'beauty_a.png',
     label: '清楚系・黒髪ロング（水着）',
+    /** FANZAキーワード検索用（投稿内容と一致させる） */
+    searchKeyword: '清楚 黒髪',
+    /** マーケティング画像のカード内タグ表示 */
+    cardTag: '清楚系 • 黒髪ロング',
     templates: [
       '「清楚系・黒髪ロング」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #清楚系',
       '清楚系で純朴なタイプを探すの、意外と苦労しませんか？\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #清楚系 #黒髪ロング'
@@ -28,6 +32,8 @@ export const MARKETING_SETS = [
     faceTypeId: 'D1',
     imageFile: 'beauty_b.png',
     label: 'ギャル系・金髪（水着）',
+    searchKeyword: 'ギャル 金髪',
+    cardTag: 'ギャル系 • 金髪',
     templates: [
       '「ギャル系・派手髪」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #ギャル系',
       '夏っぽくて元気なギャル系が好きな人へ。\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #ギャル系 #金髪'
@@ -38,6 +44,8 @@ export const MARKETING_SETS = [
     faceTypeId: 'E1',
     imageFile: 'beauty_c.png',
     label: 'クール系・ショート（水着）',
+    searchKeyword: 'クール ショートヘア',
+    cardTag: 'クール系 • ショート',
     templates: [
       '「クール系・ショートヘア」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #クール系',
       '大人っぽくてクールなショートヘアが好きな人へ。\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #クール系 #ショートヘア'
@@ -48,6 +56,8 @@ export const MARKETING_SETS = [
     faceTypeId: 'F1',
     imageFile: 'app_ui.png',
     label: 'アプリUI画面（汎用）',
+    searchKeyword: 'スワイプ 人気',
+    cardTag: 'スワイプ学習 • AI提案',
     templates: [
       '女優版Tinderを作りました\n\n好きな顔にハート、違う顔にバツをスワイプするだけで\nAIが好みを学習してFANZAの動画を自動提案\n\nやるたびに精度が上がっていく\n{URL}\n\n#FANZA #AI',
       'FANZAで2時間迷った末に\n昨日も見たやつを選ぶ現象、なんとかならないか\n\n→ 女優写真をスワイプすると\nAIが好みを学習して「これ絶対好きでしょ」って出してくれる\n\n{URL}\n\n#FANZA #AI',
