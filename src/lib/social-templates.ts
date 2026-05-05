@@ -1,97 +1,283 @@
 /**
  * SNS投稿テンプレート管理
  *
- * X（Twitter）・Instagram 向けの投稿テキストを管理するモジュール。
- * - X: テキスト中心（URL + ハッシュタグ）
- * - Instagram: キャプション形式（顔タイプカードに添付）
+ * X（Twitter）向けの投稿テキストを管理するモジュール。
+ * - 22種類の単一タイプセットを日別ローテーションで回す
+ * - searchKeyword で FANZA API を検索 → 一致した動画パッケ画を投稿画像に使用
+ * - テキスト内容と投稿画像のタイプが確実に一致する設計
  */
 
 export const SITE_URL = 'https://dostrike-ai.vercel.app';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// マーケティングセット定義（画像とテキストの完全な整合性を保証）
+// マーケティングセット定義（22種類・単一タイプ）
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const MARKETING_SETS = [
   {
-    id: 'type_a',
+    id: 'seiso',
     faceTypeId: 'A1',
     imageFile: 'beauty_a.png',
-    label: '清楚系・黒髪ロング（水着）',
-    /** FANZAキーワード検索用（投稿内容と一致させる） */
-    searchKeyword: '清楚 黒髪',
-    /** マーケティング画像のカード内タグ表示 */
-    cardTag: '清楚系 • 黒髪ロング',
+    label: '清楚系',
+    searchKeyword: '清楚',
+    cardTag: '清楚系',
     templates: [
-      '「清楚系・黒髪ロング」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #清楚系',
-      '清楚系で純朴なタイプを探すの、意外と苦労しませんか？\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #清楚系 #黒髪ロング'
-    ]
+      '「清楚系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#清楚系 #FANZA #AI',
+      '清楚で芯のある女性を探すのって意外と大変。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動で見つけてくれます\n\n{URL}\n\n#清楚系 #FANZA',
+    ],
   },
   {
-    id: 'type_b',
+    id: 'gal',
     faceTypeId: 'D1',
     imageFile: 'beauty_b.png',
-    label: 'ギャル系・金髪（水着）',
-    searchKeyword: 'ギャル 金髪',
-    cardTag: 'ギャル系 • 金髪',
+    label: 'ギャル系',
+    searchKeyword: 'ギャル',
+    cardTag: 'ギャル系',
     templates: [
-      '「ギャル系・派手髪」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #ギャル系',
-      '夏っぽくて元気なギャル系が好きな人へ。\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #ギャル系 #金髪'
-    ]
+      '「ギャル系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#ギャル系 #FANZA #AI',
+      '元気でノリのいいギャル系が好きな人へ。\n\nスワイプするだけでAIが好みを学習して\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#ギャル系 #FANZA',
+    ],
   },
   {
-    id: 'type_c',
+    id: 'cool',
     faceTypeId: 'E1',
     imageFile: 'beauty_c.png',
-    label: 'クール系・ショート（水着）',
-    searchKeyword: 'クール ショートヘア',
-    cardTag: 'クール系 • ショート',
+    label: 'クール系',
+    searchKeyword: 'クール',
+    cardTag: 'クール系',
     templates: [
-      '「クール系・ショートヘア」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#FANZA #AI #クール系',
-      '大人っぽくてクールなショートヘアが好きな人へ。\n\nAIにスワイプで好みを教えるだけで、あなたにぴったりの作品を自動提案してくれます。\n\n{URL}\n\n#FANZA #クール系 #ショートヘア'
-    ]
+      '「クール系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#クール系 #FANZA #AI',
+      'ミステリアスでクールな雰囲気の女性が好きな人へ。\n\nスワイプで好みを教えるだけで\nAIが自動でドストライク作品を提案します\n\n{URL}\n\n#クール系 #FANZA',
+    ],
   },
   {
-    id: 'ui_mockup',
+    id: 'onesan',
     faceTypeId: 'F1',
-    imageFile: 'app_ui.png',
-    label: 'アプリUI画面（汎用）',
-    searchKeyword: 'スワイプ 人気',
-    cardTag: 'スワイプ学習 • AI提案',
+    imageFile: 'beauty_a.png',
+    label: 'お姉さん系',
+    searchKeyword: 'お姉さん',
+    cardTag: 'お姉さん系',
     templates: [
-      '女優版Tinderを作りました\n\n好きな顔にハート、違う顔にバツをスワイプするだけで\nAIが好みを学習してFANZAの動画を自動提案\n\nやるたびに精度が上がっていく\n{URL}\n\n#FANZA #AI',
-      'FANZAで2時間迷った末に\n昨日も見たやつを選ぶ現象、なんとかならないか\n\n→ 女優写真をスワイプすると\nAIが好みを学習して「これ絶対好きでしょ」って出してくれる\n\n{URL}\n\n#FANZA #AI',
-      'スワイプするたびに賢くなるAIを作った\n\n好きな顔→ハート ❤️\n違う顔→バツ ✕\n\nそれだけで好みを学習して\nFANZAのドストライク動画を提案してくれる\n\n{URL}\n\n#AI活用 #FANZA',
-      'FANZAを賢く使う方法（2026年版）\n\n❌ ランキングから探す\n❌ 人気女優で絞る\n⭕ 好みをAIにスワイプで教えて自動提案させる\n\n3番だけ次元が違う\n{URL}\n\n#FANZA',
-      '「好きな女優のタイプは？」って聞かれて\nちゃんと答えられる人どのくらいいる？\n\n言語化できなくてもスワイプするだけで\nAIが分析してドストライク動画を出してくれる\n\n{URL}\n\nあなたのタイプ教えてください↓'
-    ]
-  }
-];
-
-/** 時間帯別テンプレート（UIモックアップ用に使用） */
-export const X_TIME_TEMPLATES: Record<string, string[]> = {
-  morning: [
-    'おはようございます\n\n今日の雑学：自分の「好みのタイプ」を言語化できる男性は20%以下らしい\n\n残り80%の人のために作りました\n写真をスワイプするだけでAIが好みを学習\n{URL}',
-    '朝から何ですが\n\nFANZAで理想の動画を探すのに毎回30分かけてる人へ\n\nスワイプで好みを学習したAIが代わりに探します\n{URL}\n\n#FANZA',
-  ],
-  noon: [
-    '昼休みに試してほしいもの\n\n女優写真をスワイプするだけで\nAIが好みを学習してFANZAの動画を提案してくれるやつ\n\n無料です\n{URL}',
-    'FANZAの使い方が変わるかもしれないサービス\n\n好きな顔にハート、嫌いな顔にバツ\nAIが学習して似たタイプの女優の動画だけ出してくれる\n{URL}\n\n#AI #FANZA',
-  ],
-  evening: [
-    '夜にFANZAを開くたびに\nどれ見るか迷って時間だけ溶けていく\n\nその問題を解決するAIを作りました\nスワイプで好みを教えると自動で選んでくれる\n{URL}',
-    '今夜のFANZA選びに困ってる人へ\n\n女優写真をスワイプするだけ\nAIが好みを学習してドストライクを提案します\n\n{URL}\n\n#FANZA #ドストライク',
-  ],
-};
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Instagram テンプレート（キャプション）
-// ─────────────────────────────────────────────────────────────────────────────
-
-export const INSTAGRAM_CAPTIONS = [
-  '✨ あなたの「ドストライクタイプ」、AIが見つけます\n\n好きな顔の写真にハート❤️\n違う顔にバツ✕をスワイプするだけ\n\nAIがあなたの好みを学習して\nFANZAのドストライク動画を自動提案📱\n\n👆 プロフィールのリンクから無料で体験\n\n#AI活用 #好みのタイプ #ドストライク #FANZA',
-  '💗 スワイプで好みを学習するAIを作りました\n\nTinderみたいに女優の顔写真をスワイプ\nやればやるほど精度が上がって\n本当に好きなタイプの動画だけ出てくるようになる\n\n完全無料・登録不要\n\n👆 プロフィールリンクからアクセス\n\n#AI #FANZA #無料',
-  '🔍 自分でも知らなかった「本当の好み」が分かる\n\n女優写真をひたすらスワイプ→AIが好みを分析\n→似たタイプの女優の動画を自動提案\n\nなんか怖いくらい当たります\n\n👆 プロフィールのリンクへ\n\n#AI診断 #好みのタイプ #FANZA',
+      '「お姉さん系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#お姉さん系 #FANZA #AI',
+      '色っぽくて余裕があるお姉さん系が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を見つけてくれます\n\n{URL}\n\n#お姉さん系 #FANZA',
+    ],
+  },
+  {
+    id: 'kyonyu',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_b.png',
+    label: '巨乳',
+    searchKeyword: '巨乳',
+    cardTag: '巨乳',
+    templates: [
+      '「巨乳」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#巨乳 #FANZA #AI',
+      '巨乳といっても好みの細かい違いってありますよね。\n\nスワイプで好みを学習したAIが\nあなたの「まさにコレ」を自動提案します\n\n{URL}\n\n#巨乳 #FANZA',
+    ],
+  },
+  {
+    id: 'slender',
+    faceTypeId: 'E1',
+    imageFile: 'beauty_c.png',
+    label: 'スレンダー',
+    searchKeyword: 'スレンダー',
+    cardTag: 'スレンダー',
+    templates: [
+      '「スレンダー」な女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#スレンダー #FANZA #AI',
+      'しなやかでスレンダーなボディが好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#スレンダー #FANZA',
+    ],
+  },
+  {
+    id: 'hitozuma',
+    faceTypeId: 'F1',
+    imageFile: 'beauty_a.png',
+    label: '人妻',
+    searchKeyword: '人妻',
+    cardTag: '人妻',
+    templates: [
+      '「人妻もの」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#人妻 #FANZA #AI',
+      '人妻ものって当たり外れが激しくないですか？\n\nスワイプで好みを学習したAIが\n「ドンピシャ」の作品だけを自動で出してくれます\n\n{URL}\n\n#人妻 #FANZA',
+    ],
+  },
+  {
+    id: 'seifuku',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_b.png',
+    label: '制服',
+    searchKeyword: '制服',
+    cardTag: '制服',
+    templates: [
+      '「制服」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#制服 #FANZA #AI',
+      '制服が好きな人へ。\n\nスワイプで好みを教えるだけで\nAIが自動でドストライクな制服作品を提案します\n\nやるたびに精度が上がっていく\n{URL}\n\n#制服 #FANZA',
+    ],
+  },
+  {
+    id: 'ol',
+    faceTypeId: 'D1',
+    imageFile: 'beauty_c.png',
+    label: 'OL',
+    searchKeyword: 'OL',
+    cardTag: 'OL',
+    templates: [
+      '「OL」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#OL #FANZA #AI',
+      'スーツ姿のOLが好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#OL #FANZA',
+    ],
+  },
+  {
+    id: 'shirouto',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_a.png',
+    label: '素人系',
+    searchKeyword: '素人',
+    cardTag: '素人系',
+    templates: [
+      '「素人系」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#素人 #FANZA #AI',
+      '作り込んでない自然な素人感が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を見つけてくれます\n\n{URL}\n\n#素人 #FANZA',
+    ],
+  },
+  {
+    id: 'bikyaku',
+    faceTypeId: 'E1',
+    imageFile: 'beauty_b.png',
+    label: '美脚',
+    searchKeyword: '美脚',
+    cardTag: '美脚',
+    templates: [
+      '「美脚」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#美脚 #FANZA #AI',
+      '美脚に目が行ってしまう人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#美脚 #FANZA',
+    ],
+  },
+  {
+    id: 'tennen',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_c.png',
+    label: '天然系',
+    searchKeyword: '天然',
+    cardTag: '天然系',
+    templates: [
+      '「天然系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#天然 #FANZA #AI',
+      '天然でほんわかした雰囲気が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#天然 #FANZA',
+    ],
+  },
+  {
+    id: 'megane',
+    faceTypeId: 'E1',
+    imageFile: 'beauty_a.png',
+    label: 'メガネっ娘',
+    searchKeyword: 'メガネ',
+    cardTag: 'メガネっ娘',
+    templates: [
+      '「メガネっ娘」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#メガネっ娘 #FANZA #AI',
+      'メガネをかけた知的な女性が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#メガネっ娘 #FANZA',
+    ],
+  },
+  {
+    id: 'idol',
+    faceTypeId: 'D1',
+    imageFile: 'beauty_b.png',
+    label: 'アイドル系',
+    searchKeyword: 'アイドル',
+    cardTag: 'アイドル系',
+    templates: [
+      '「アイドル系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#アイドル系 #FANZA #AI',
+      '顔がかわいくてアイドル系の雰囲気が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#アイドル系 #FANZA',
+    ],
+  },
+  {
+    id: 'joshidaisei',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_c.png',
+    label: '女子大生',
+    searchKeyword: '女子大生',
+    cardTag: '女子大生',
+    templates: [
+      '「女子大生」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#女子大生 #FANZA #AI',
+      '大学生らしいフレッシュさが好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#女子大生 #FANZA',
+    ],
+  },
+  {
+    id: 'jukujo',
+    faceTypeId: 'F1',
+    imageFile: 'beauty_a.png',
+    label: '熟女',
+    searchKeyword: '熟女',
+    cardTag: '熟女',
+    templates: [
+      '「熟女」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#熟女 #FANZA #AI',
+      '熟女の艶っぽさが好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#熟女 #FANZA',
+    ],
+  },
+  {
+    id: 'chijo',
+    faceTypeId: 'D1',
+    imageFile: 'beauty_b.png',
+    label: '痴女',
+    searchKeyword: '痴女',
+    cardTag: '痴女',
+    templates: [
+      '「痴女系」が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#痴女 #FANZA #AI',
+      '積極的でグイグイくる痴女系が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#痴女 #FANZA',
+    ],
+  },
+  {
+    id: 'kurokami',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_c.png',
+    label: '黒髪',
+    searchKeyword: '黒髪',
+    cardTag: '黒髪',
+    templates: [
+      '「黒髪」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#黒髪 #FANZA #AI',
+      '黒髪の清潔感のある女性が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#黒髪 #FANZA',
+    ],
+  },
+  {
+    id: 'short',
+    faceTypeId: 'E1',
+    imageFile: 'beauty_a.png',
+    label: 'ショートカット',
+    searchKeyword: 'ショートカット',
+    cardTag: 'ショートカット',
+    templates: [
+      '「ショートカット」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#ショートカット #FANZA #AI',
+      'ショートカットが似合う女性が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#ショートカット #FANZA',
+    ],
+  },
+  {
+    id: 'tsundere',
+    faceTypeId: 'D1',
+    imageFile: 'beauty_b.png',
+    label: 'ツンデレ',
+    searchKeyword: 'ツンデレ',
+    cardTag: 'ツンデレ',
+    templates: [
+      '「ツンデレ」な女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#ツンデレ #FANZA #AI',
+      '最初はツンッとしてるのに実はデレデレ…そういうの好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#ツンデレ #FANZA',
+    ],
+  },
+  {
+    id: 'koakuma',
+    faceTypeId: 'D1',
+    imageFile: 'beauty_c.png',
+    label: '小悪魔系',
+    searchKeyword: '小悪魔',
+    cardTag: '小悪魔系',
+    templates: [
+      '「小悪魔系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#小悪魔系 #FANZA #AI',
+      '誘惑してくる小悪魔系が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#小悪魔系 #FANZA',
+    ],
+  },
+  {
+    id: 'iyashi',
+    faceTypeId: 'A1',
+    imageFile: 'beauty_a.png',
+    label: '癒し系',
+    searchKeyword: '癒し',
+    cardTag: '癒し系',
+    templates: [
+      '「癒し系」の女性が好きですか？\n\n好みの顔をスワイプするだけでAIが好みを学習して\nあなたにドストライクな動画だけを提案してくれます\n\n完全無料です👇\n{URL}\n\n#癒し系 #FANZA #AI',
+      'ほっこり癒し系の雰囲気が好きな人へ。\n\nスワイプで好みを学習したAIが\nFANZAのドストライク作品を自動提案します\n\n{URL}\n\n#癒し系 #FANZA',
+    ],
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -110,13 +296,6 @@ export function fillTemplate(text: string, vars: Record<string, string>): string
 export function getTodayMarketingSet() {
   const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000));
   return MARKETING_SETS[dayIndex % MARKETING_SETS.length];
-}
-
-/** Instagram用テンプレートを選択する */
-export function pickInstagramTemplate(seed?: number): string {
-  const arr = INSTAGRAM_CAPTIONS;
-  const idx = seed !== undefined ? seed % arr.length : Math.floor(Math.random() * arr.length);
-  return fillTemplate(arr[idx], { URL: SITE_URL });
 }
 
 /** 投稿テキストが X の文字数制限（280文字）を超えていないか確認・整形する */
