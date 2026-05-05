@@ -12,10 +12,60 @@
  *
  * NOTE: vibeフィルターはFANZA API上では体型/身長/年齢データのみから
  *       判定できないため、FANZA APIパスでは無視する（DB保有データがあれば使用）。
+ *
+ * 画像品質: FANZAの女優プロフィール画像（最大240×360px）はスワイプカードに対して低解像度。
+ *          FANZA ItemList API でその女優の出演動画サムネイル（~800×538px）を並列取得して差し替える。
+ *          2秒タイムアウト・最大20並列。取得失敗時はプロフィール画像にフォールバック。
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createServiceClient } from '@/lib/supabase/server';
+
+// ── ビデオサムネイル取得（女優IDごとにFANZA ItemList APIを呼ぶ）────────────
+async function fetchVideoThumbnail(
+  actressId: string,
+  affiliateId: string,
+  apiKey: string,
+): Promise<string | null> {
+  try {
+    const params = new URLSearchParams({
+      site: 'FANZA', service: 'digital', floor: 'videoa',
+      article: 'actress', article_id: actressId,
+      hits: '1', sort: 'date',
+      affiliate_id: affiliateId, api_id: apiKey, output: 'json',
+    });
+    const res = await fetch(
+      `https://api.dmm.com/affiliate/v3/ItemList?${params}`,
+      { signal: AbortSignal.timeout(2000) },
+    );
+    if (!res.ok) return null;
+    const data = await res.json() as {
+      result: { status: string | number; items?: Array<{ imageURL?: { large?: string; small?: string } }> };
+    };
+    if (String(data.result.status) !== '200') return null;
+    const item = data.result.items?.[0];
+    return item?.imageURL?.large ?? item?.imageURL?.small ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** 女優リストのimageUrlをビデオサムネイルで差し替える（並列、フォールバックあり） */
+async function enrichWithVideoThumbnails(
+  actresses: SwipeDeckActress[],
+  affiliateId: string | undefined,
+  apiKey: string | undefined,
+): Promise<SwipeDeckActress[]> {
+  if (!affiliateId || !apiKey) return actresses;
+  const results = await Promise.allSettled(
+    actresses.map(a => fetchVideoThumbnail(a.id, affiliateId, apiKey)),
+  );
+  return actresses.map((a, i) => {
+    const r = results[i];
+    const thumb = r.status === 'fulfilled' ? r.value : null;
+    return thumb ? { ...a, imageUrl: thumb } : a;
+  });
+}
 
 export interface SwipeDeckActress {
   id: string;
@@ -123,13 +173,12 @@ export async function GET(req: NextRequest) {
         }
 
         if (rows.length >= 1) {
-          // 年齢データがある女優のみ（age_group が指定値と一致する行のみ）
-          // ※ dbQuery で eq('age_group', ageFilter) 済みなので追加フィルター不要
           const finalRows = applyHeightFilter(rows);
-          const actresses: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
+          const base: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
             id: a.id, name: a.name, imageUrl: a.image_url, tags: (a.tags as string[]) ?? [],
           }));
-          console.log(`[swipe-deck] DB hit (age-strict): ${actresses.length} actresses (body=${bodyFilter} age=${ageFilter} height=${heightFilter})`);
+          console.log(`[swipe-deck] DB hit (age-strict): ${base.length} actresses (body=${bodyFilter} age=${ageFilter} height=${heightFilter})`);
+          const actresses = await enrichWithVideoThumbnails(base, affiliateId, apiKey);
           return NextResponse.json({ actresses, source: 'db' });
         }
 
@@ -150,10 +199,11 @@ export async function GET(req: NextRequest) {
 
         if (rows.length >= 4) {
           const finalRows = applyHeightFilter(rows);
-          const actresses: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
+          const base: SwipeDeckActress[] = shuffle(finalRows).slice(0, 20).map(a => ({
             id: a.id, name: a.name, imageUrl: a.image_url, tags: (a.tags as string[]) ?? [],
           }));
-          console.log(`[swipe-deck] DB hit: ${actresses.length} actresses (body=${bodyFilter} age=all height=${heightFilter})`);
+          console.log(`[swipe-deck] DB hit: ${base.length} actresses (body=${bodyFilter} age=all height=${heightFilter})`);
+          const actresses = await enrichWithVideoThumbnails(base, affiliateId, apiKey);
           return NextResponse.json({ actresses, source: 'db' });
         }
 
@@ -297,15 +347,18 @@ export async function GET(req: NextRequest) {
         else candidates = allTagged;
       }
 
-      const result: SwipeDeckActress[] = shuffle(candidates)
+      const base: SwipeDeckActress[] = shuffle(candidates)
         .map(({ id, name, imageUrl, tags }) => ({ id, name, imageUrl, tags }))
         .slice(0, 20);
 
-      console.log(`[swipe-deck] strict=${strictFiltered.length} candidates=${candidates.length} final=${result.length}`);
+      console.log(`[swipe-deck] strict=${strictFiltered.length} candidates=${candidates.length} final=${base.length}`);
 
       // 1件でも実データがあればモックを使わない
-      if (result.length >= 1) {
-        return NextResponse.json({ actresses: result, source: 'fanza' });
+      if (base.length >= 1) {
+        // FANZA APIパスでは既にActressSearchでimageURLを取得済みだが
+        // ビデオサムネイルの方がはるかに高解像度（800×538px vs 240×360px）
+        const actresses = await enrichWithVideoThumbnails(base, affiliateId, apiKey);
+        return NextResponse.json({ actresses, source: 'fanza' });
       }
     } catch (err) {
       console.error('[swipe-deck] FANZA API failed:', String(err));

@@ -480,6 +480,13 @@ export default function DashboardPage() {
     if (viewMode.type === 'trend') setTrendPage(0);
   }, [viewMode]);
 
+  // trendPage変更時：レンダリング完了後に画面最上部へスクロール（スマホ対応、instant）
+  const isFirstTrendPageMount = useRef(true);
+  useEffect(() => {
+    if (isFirstTrendPageMount.current) { isFirstTrendPageMount.current = false; return; }
+    window.scrollTo(0, 0);
+  }, [trendPage]);
+
   // ── ドストライク選抜：Route 0 からパーソナライズ動画をリアルタイム取得 ──
   // preferenceCount を待たず即時フェッチ（認証済みならRoute 0が動く）
   useEffect(() => {
@@ -1480,7 +1487,7 @@ export default function DashboardPage() {
         {!isTrendLoading && (
           <div className="flex items-center justify-center gap-3 mt-6 pb-8">
             <button
-              onClick={() => { setTrendPage(p => Math.max(0, p - 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onClick={() => setTrendPage(p => Math.max(0, p - 1))}
               disabled={trendPage === 0}
               className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
             >
@@ -1490,7 +1497,7 @@ export default function DashboardPage() {
               {Array.from({ length: TREND_MAX_PAGES }, (_, i) => (
                 <button
                   key={i}
-                  onClick={() => { setTrendPage(i); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                  onClick={() => setTrendPage(i)}
                   className={`w-8 h-8 rounded-full text-xs font-bold transition-colors ${trendPage === i ? 'bg-primary text-white' : 'bg-secondary text-foreground/60 hover:bg-border'}`}
                 >
                   {i + 1}
@@ -1498,7 +1505,7 @@ export default function DashboardPage() {
               ))}
             </div>
             <button
-              onClick={() => { setTrendPage(p => Math.min(TREND_MAX_PAGES - 1, p + 1)); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+              onClick={() => setTrendPage(p => Math.min(TREND_MAX_PAGES - 1, p + 1))}
               disabled={trendPage === TREND_MAX_PAGES - 1 || trendVideos.length < TREND_PAGE_SIZE}
               className="px-4 py-2 rounded-full text-xs font-bold border border-border bg-card text-foreground disabled:opacity-30 disabled:cursor-not-allowed hover:bg-secondary transition-colors"
             >
@@ -1989,50 +1996,62 @@ export default function DashboardPage() {
       </div>
 
       {/* Interstitial Ad Popup */}
-      {showInterstitialAd && !isVip && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 px-5 sm:px-0 animate-in fade-in duration-300">
-          <div className="relative w-full max-w-[340px] bg-card rounded-3xl overflow-hidden shadow-2xl border border-border flex flex-col zoom-in-95 animate-in duration-300">
-            {/* 非常に大きな×ボタン */}
-            <button 
-              onClick={() => setShowInterstitialAd(false)} 
-              className="absolute top-3 right-3 z-20 w-11 h-11 bg-black/60 hover:bg-black text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
-              aria-label="広告を閉じる"
-            >
-              <X className="w-5 h-5 stroke-[2.5px]" />
-            </button>
-            
-            <div className="p-3 bg-gradient-to-br from-primary/10 to-transparent border-b border-border/50 text-center">
-              <span className="bg-yellow-400 text-black px-2 py-0.5 rounded shadow-sm text-[10px] font-extrabold tracking-widest uppercase">Sponsored / PR</span>
-            </div>
-            
-            <div className="p-5 flex flex-col items-center text-center space-y-4">
-              <img 
-                src={`https://images.unsplash.com/photo-${AD_IMAGES[AFFILIATE_ADS[interstitialAdIndex].imgIndex % AD_IMAGES.length]}?w=600&h=400&fit=crop&q=80`} 
-                alt="ad" 
-                className="w-full rounded-2xl aspect-[4/3] object-cover mb-1 shadow-sm" 
-              />
-              
-              <h3 className="text-lg font-extrabold leading-tight">
-                {AFFILIATE_ADS[interstitialAdIndex].title}
-              </h3>
-              <p className="text-xs text-foreground/60 leading-relaxed font-bold px-2">
-                ユーザー様向けに特別に厳選されたキャンペーン広告です。今すぐチェック！
-              </p>
-              
-              <a
-                href={AFFILIATE_ADS[interstitialAdIndex].url}
-                target="_blank"
-                rel="noopener noreferrer"
+      {showInterstitialAd && !isVip && (() => {
+        const ad        = AFFILIATE_ADS[interstitialAdIndex % AFFILIATE_ADS.length];
+        const adVideo   = adVideos.length > 0 ? adVideos[interstitialAdIndex % adVideos.length] : null;
+        const thumbSrc  = adVideo?.thumbnailUrl;
+        const adTitle   = adVideo?.title ?? ad.title;
+        const adHref    = adVideo?.affiliateUrl ?? ad.url;
+        return (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 px-5 sm:px-0 animate-in fade-in duration-300">
+            <div className="relative w-full max-w-[340px] bg-card rounded-3xl overflow-hidden shadow-2xl border border-border flex flex-col zoom-in-95 animate-in duration-300">
+              {/* 閉じるボタン */}
+              <button
                 onClick={() => setShowInterstitialAd(false)}
-                className={`w-full mt-2 py-3.5 ${AFFILIATE_ADS[interstitialAdIndex].color} hover:opacity-90 rounded-xl font-extrabold flex items-center justify-center shadow-md transition-all text-sm`}
+                className="absolute top-3 right-3 z-20 w-11 h-11 bg-black/60 hover:bg-black text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
+                aria-label="広告を閉じる"
               >
-                FANZAで今すぐ見る →
-              </a>
+                <X className="w-5 h-5 stroke-[2.5px]" />
+              </button>
+
+              <div className="p-3 bg-gradient-to-br from-primary/10 to-transparent border-b border-border/50 text-center">
+                <span className="bg-yellow-400 text-black px-2 py-0.5 rounded shadow-sm text-[10px] font-extrabold tracking-widest uppercase">Sponsored / PR</span>
+              </div>
+
+              <div className="p-5 flex flex-col items-center text-center space-y-3">
+                {thumbSrc ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={thumbSrc}
+                    alt={adTitle}
+                    className="w-full rounded-2xl aspect-video object-cover shadow-sm"
+                  />
+                ) : (
+                  <div className="w-full rounded-2xl aspect-video bg-secondary/60 animate-pulse" />
+                )}
+
+                <h3 className="text-sm font-extrabold leading-snug line-clamp-2 px-1">
+                  {adTitle}
+                </h3>
+
+                {adVideo?.actress && (
+                  <p className="text-xs text-foreground/50 font-bold -mt-1">{adVideo.actress}</p>
+                )}
+
+                <a
+                  href={adHref}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setShowInterstitialAd(false)}
+                  className={`w-full py-3.5 ${ad.color} hover:opacity-90 rounded-xl font-extrabold flex items-center justify-center shadow-md transition-all text-sm`}
+                >
+                  FANZAで今すぐ見る →
+                </a>
+              </div>
             </div>
-            
           </div>
-        </div>
-      )}
+        );
+      })()}
       {/* ============ Undo Toast ============ */}
       {undoToast && (
         <div className="fixed bottom-20 sm:bottom-6 left-1/2 -translate-x-1/2 z-[200] animate-in fade-in slide-in-from-bottom-4 duration-300">
